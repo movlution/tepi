@@ -768,9 +768,28 @@ namespace Tepi
                         f.Box.Text = picked;
                         f.Box.SelectionStart = f.Box.Text.Length;
                         save();
-                        if (suggest != null) { suggest.Hide(); suggest = null; }
+                        if (suggest != null) { suggest.Close2(); suggest = null; }
                     });
                 };
+
+                // Enter takes the first suggestion, Esc dismisses the list
+                f.Box.KeyDown += delegate(object s, KeyEventArgs e)
+                {
+                    if (suggest == null || !suggest.Visible) return;
+                    if (e.KeyCode == Keys.Escape) { e.SuppressKeyPress = true; suggest.Close2(); suggest = null; return; }
+                    if (e.KeyCode != Keys.Enter) return;
+                    var hits = Cities.Suggest(f.Box.Text, 1);
+                    if (hits.Count == 0) return;
+                    e.SuppressKeyPress = true;
+                    string pick = hits[0];
+                    suggest.Close2();
+                    suggest = null;
+                    f.Box.Text = pick;
+                    f.Box.SelectionStart = f.Box.Text.Length;
+                    save();
+                };
+                // Leaving the box dismisses it; the list never held the caret anyway
+                f.Box.Leave += delegate { if (suggest != null) { suggest.Close2(); suggest = null; } };
 
                 save = delegate
                 {
@@ -1938,14 +1957,17 @@ namespace Tepi
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
         }
 
+        // Never take the caret away from the box that opened this list
+        protected override bool ShowWithoutActivation { get { return true; } }
+
         protected override CreateParams CreateParams
         {
             get
             {
                 var cp = base.CreateParams;
-                // Shadowed, and never a taskbar button
                 cp.ClassStyle |= 0x20000;
-                cp.ExStyle |= 0x00000080; // WS_EX_TOOLWINDOW
+                cp.ExStyle |= 0x00000080;   // WS_EX_TOOLWINDOW: no taskbar button
+                cp.ExStyle |= 0x08000000;   // WS_EX_NOACTIVATE: typing stays in the box
                 return cp;
             }
         }
@@ -1969,11 +1991,8 @@ namespace Tepi
             Invalidate();
         }
 
-        protected override void OnDeactivate(EventArgs e)
-        {
-            base.OnDeactivate(e);
-            Hide();
-        }
+        // Not activated, so Deactivate never fires: the owner closes it instead
+        public void Close2() { Hide(); }
 
         protected override void OnPaintBackground(PaintEventArgs e)
         {
