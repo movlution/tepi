@@ -911,11 +911,12 @@ namespace Tepi
         void DropApproval(Approval a)
         {
             bool expired = a.TimedOut;
-            approvals.Remove(a);
+            // SettleApprovals/Decide may have removed it first: then it is not "expired"
+            bool removed = approvals.Remove(a);
             PublishPhone();
             Kick();
             // The card disappearing silently left the agent waiting in the terminal
-            if (expired) ShowInfo(Ink.IcoTerminal, Lang.T("Izin kedaluwarsa"), Lang.T("Jawab di terminal"), true);
+            if (expired && removed) ShowInfo(Ink.IcoTerminal, Lang.T("Izin kedaluwarsa"), Lang.T("Jawab di terminal"), true);
         }
 
         void ReleaseApprovals()

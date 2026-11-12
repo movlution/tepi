@@ -574,15 +574,22 @@ namespace Tepi
             string who = a.Project + (a.Profile.Length > 0 ? " · " + a.Profile : "");
             if (approvals.Count > 1) who = "1/" + approvals.Count + " · " + who;
             var whoInk = p.T.Sub;
+            var whoFont = Ink.Small(11.5f);
+            string whoTail = "";
             if (a.UntilUtc != default(DateTime))
             {
                 // The terminal gives up after agent.wait; say how long is left
                 double left = Math.Max(0, (a.UntilUtc - DateTime.UtcNow).TotalSeconds);
-                who += " · " + Lang.F("{0} dtk", (int)Math.Ceiling(left));
+                whoTail = " · " + Lang.F("{0} dtk", (int)Math.Ceiling(left));
                 if (left <= 15) whoInk = p.T.Negative;
             }
+            // Long project/profile names must not run into the title; the countdown stays
+            float whoRoom = Math.Max(90, w / 2 - 12) - (whoTail.Length > 0 ? p.Measure(whoTail, whoFont) : 0);
+            while (who.Length > 6 && p.Measure(who, whoFont) > whoRoom)
+                who = who.Substring(0, who.Length - 2).TrimEnd(' ', '·') + "…";
+            who += whoTail;
             p.Text(a.Agent + Lang.T(" minta izin"), Ink.Semi(14.5f), p.T.Text, 24, 28, w - 200, StringAlignment.Near);
-            p.TextRight(who, Ink.Small(11.5f), whoInk, w - 24, 28);
+            p.TextRight(who, whoFont, whoInk, w - 24, 28);
             string label = AgentHub.ToolLabel(a.Tool);
             p.Text(label, Ink.Semi(12f), p.T.Text, 24, 51, 140, StringAlignment.Near);
             float lx = 24 + p.Measure(label, Ink.Semi(12f)) + 8;

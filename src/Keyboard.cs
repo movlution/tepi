@@ -161,10 +161,13 @@ namespace Tepi
                 // Two-tone ring: the outer band contrasts with the surface, the inner
                 // hairline contrasts with whatever fill sits under the focus. An
                 // accent-on-accent ring vanished on active tabs and primary buttons.
-                p.StrokeRound(r, radius, Ink.Flip.Bg, 3f);
+                // Pick the tone opposite the surface actually being drawn (the approval
+                // card renders on Ink.Flip), not the global one.
+                var ring = ReferenceEquals(p.T, Ink.Flip) ? Ink.Base : Ink.Flip;
+                p.StrokeRound(r, radius, ring.Bg, 3f);
                 var inner = r;
                 inner.Inflate(-1.5f, -1.5f);
-                p.StrokeRound(inner, Math.Max(2, radius - 1.5f), Ink.Flip.Text, 1.2f);
+                p.StrokeRound(inner, Math.Max(2, radius - 1.5f), ring.Text, 1.2f);
                 return;
             }
         }

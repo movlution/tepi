@@ -41,8 +41,14 @@ namespace Tepi
             if (!micPresent) { DictSay(Lang.T("Tidak ada mikrofon"), "", true); return; }
             try
             {
-                // Leftovers from a crash
-                if (Directory.Exists(RapatTmp)) Directory.Delete(RapatTmp, true);
+                // Leftovers: an unclaimed recording is never overwritten
+                if (Directory.Exists(RapatTmp))
+                {
+                    bool leftover = false;
+                    try { leftover = RapatAudioSeconds() >= 3; } catch (Exception) { }
+                    if (leftover) Directory.Move(RapatTmp, NextRapatDir(DateTime.Now, "rekaman"));
+                    else if (Directory.Exists(RapatTmp)) Directory.Delete(RapatTmp, true);
+                }
                 Directory.CreateDirectory(RapatTmp);
                 rapatMicFile = File.Create(Path.Combine(RapatTmp, "kamu.pcm"));
                 rapatSysFile = File.Create(Path.Combine(RapatTmp, "lawan.pcm"));
@@ -138,7 +144,15 @@ namespace Tepi
                     try { kept = KeepRapatAudio(started, error); }
                     catch (Exception ex) { Log.Write("rapat simpan: " + ex.Message); }
                 }
-                try { Directory.Delete(RapatTmp, true); } catch (Exception) { }
+                // Delete the temp copy only when the recording lives somewhere else
+                if (path != null || kept != null) { try { Directory.Delete(RapatTmp, true); } catch (Exception) { } }
+                else
+                {
+                    bool hasAudio = false;
+                    try { hasAudio = RapatAudioSeconds() >= 3; } catch (Exception) { }
+                    if (hasAudio) Log.Write("rapat: rekaman masih menunggu di " + RapatTmp);
+                    else { try { Directory.Delete(RapatTmp, true); } catch (Exception) { } }
+                }
                 Post(delegate { RapatWritten(path, error, kept); });
             });
         }
@@ -185,34 +199,56 @@ namespace Tepi
             return bytes / 2.0 / Recorder.Rate;
         }
 
+        // Unique folder for a kept recording, e.g. "rekaman 2026-11-12 17.30"
+        string NextRapatDir(DateTime started, string prefix)
+        {
+            Directory.CreateDirectory(RapatDir);
+            string baseName = prefix + " " + started.ToString("yyyy-MM-dd HH.mm");
+            string dir = Path.Combine(RapatDir, baseName);
+            for (int i = 2; Directory.Exists(dir); i++) dir = Path.Combine(RapatDir, baseName + " (" + i + ")");
+            return dir;
+        }
+
         // No transcript written: move the PCM tracks into a folder as playable WAV files.
+        // The folder is renamed away first, so even a full disk cannot delete the only copy.
         // Returns the folder, or null when there is nothing worth keeping.
         string KeepRapatAudio(DateTime started, string error)
         {
             double seconds = RapatAudioSeconds();
             if (seconds < 3) return null;
-            Directory.CreateDirectory(RapatDir);
-            string baseName = "rekaman " + started.ToString("yyyy-MM-dd HH.mm");
-            string dir = Path.Combine(RapatDir, baseName);
-            for (int i = 2; Directory.Exists(dir); i++) dir = Path.Combine(RapatDir, baseName + " (" + i + ")");
-            Directory.CreateDirectory(dir);
+            string dir = NextRapatDir(started, "rekaman");
+            // Rename first: no extra disk space needed, the recording is already safe
+            Directory.Move(RapatTmp, dir);
             foreach (var name in new[] { "kamu", "lawan" })
             {
-                string pcm = Path.Combine(RapatTmp, name + ".pcm");
+                string pcm = Path.Combine(dir, name + ".pcm");
                 if (!File.Exists(pcm)) continue;
-                string wav = Path.Combine(dir, name + ".wav");
-                using (var fs = File.Create(wav))
+                try
                 {
-                    var head = Wav.Header(new FileInfo(pcm).Length);
-                    fs.Write(head, 0, head.Length);
-                    using (var src = File.OpenRead(pcm)) src.CopyTo(fs);
+                    string wav = Path.Combine(dir, name + ".wav");
+                    using (var fs = File.Create(wav))
+                    {
+                        var head = Wav.Header(new FileInfo(pcm).Length);
+                        fs.Write(head, 0, head.Length);
+                        using (var src = File.OpenRead(pcm)) src.CopyTo(fs);
+                    }
+                    File.Delete(pcm);
+                }
+                catch (Exception ex)
+                {
+                    // Disk full and the like: leave the PCM track in place
+                    Log.Write("rapat wav: " + ex.Message);
                 }
             }
-            var note = new StringBuilder();
-            note.AppendLine(Lang.T("Transkrip rapat gagal ditulis, jadi rekaman audionya disimpan di sini."));
-            note.AppendLine(Lang.F("Durasi {0}. Kamu = mikrofon laptop ini, Lawan bicara = suara dari speaker atau headset.", Clock(seconds)));
-            if (!string.IsNullOrEmpty(error)) note.AppendLine(Lang.F("Pesan: {0}", error));
-            File.WriteAllText(Path.Combine(dir, "catatan.txt"), note.ToString(), new UTF8Encoding(false));
+            try
+            {
+                var note = new StringBuilder();
+                note.AppendLine(Lang.T("Transkrip rapat gagal ditulis, jadi rekaman audionya disimpan di sini."));
+                note.AppendLine(Lang.F("Durasi {0}. Kamu = mikrofon laptop ini, Lawan bicara = suara dari speaker atau headset.", Clock(seconds)));
+                if (!string.IsNullOrEmpty(error)) note.AppendLine(Lang.F("Pesan: {0}", error));
+                File.WriteAllText(Path.Combine(dir, "catatan.txt"), note.ToString(), new UTF8Encoding(false));
+            }
+            catch (Exception ex) { Log.Write("rapat catatan: " + ex.Message); }
             return dir;
         }
 

@@ -26,6 +26,9 @@ namespace Tepi
         public static Color Sub { get { return O(Ink.Mix(Ink.Base.Bg, Ink.Base.Text, 0.62f)); } }
         // 0.57 keeps settings-window metadata above 4.5:1 (0.38 measured ~2.5-3.3:1)
         public static Color Faint { get { return O(Ink.Mix(Ink.Base.Bg, Ink.Base.Text, 0.57f)); } }
+        // Disabled chrome (switch knob, slider fill): dimmer than tertiary text so
+        // raising Faint for readability does not make disabled controls look enabled
+        public static Color Disabled { get { return O(Ink.Mix(Ink.Base.Bg, Ink.Base.Text, 0.30f)); } }
         // Monochrome accent: switches use text colour
         public static Color Accent { get { return O(Ink.Base.Accent); } }
         public static Color OnAccent { get { return O(Ink.Base.OnAccent); } }
@@ -198,7 +201,7 @@ namespace Tepi
             using (var b = new SolidBrush(Enabled ? Ink.Mix(KitInk.Line, KitInk.Accent, knob) : KitInk.Line)) g.FillPath(b, path);
             float r = 9 * s;
             float cx = track.X + 11 * s + knob * 18 * s, cy = track.Y + 11 * s;
-            using (var b = new SolidBrush(Enabled ? Ink.Mix(KitInk.Text, KitInk.OnAccent, knob) : KitInk.Faint)) g.FillEllipse(b, cx - r, cy - r, r * 2, r * 2);
+            using (var b = new SolidBrush(Enabled ? Ink.Mix(KitInk.Text, KitInk.OnAccent, knob) : KitInk.Disabled)) g.FillEllipse(b, cx - r, cy - r, r * 2, r * 2);
             if (Focused && ShowFocusCues && !KitInk.ByMouse)
             {
                 var ring = KitControl.Inside(RectangleF.Inflate(track, 2, 2), Width, Height);
@@ -354,7 +357,7 @@ namespace Tepi
             float s = Ui, f = (float)(Value - Minimum) / Math.Max(1, Maximum - Minimum);
             var t = Track;
             Fill(g, t, t.Height / 2, KitInk.Line);
-            Fill(g, new RectangleF(t.X, t.Y, Math.Max(t.Height, t.Width * f), t.Height), t.Height / 2, Enabled ? KitInk.Text : KitInk.Faint);
+            Fill(g, new RectangleF(t.X, t.Y, Math.Max(t.Height, t.Width * f), t.Height), t.Height / 2, Enabled ? KitInk.Text : KitInk.Disabled);
             float r = (dragging || Hovered ? 9 : 8) * s, cx = t.X + t.Width * f, cy = t.Y + t.Height / 2;
             using (var b = new SolidBrush(KitInk.Text)) g.FillEllipse(b, cx - r, cy - r, r * 2, r * 2);
             using (var pen = new Pen(KitInk.Line, 1f)) g.DrawEllipse(pen, cx - r, cy - r, r * 2, r * 2);

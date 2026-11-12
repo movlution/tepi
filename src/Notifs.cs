@@ -246,7 +246,7 @@ namespace Tepi
                 int wait = watcher != null ? 10000 : 1000;
                 DateTime retry;
                 lock (state) retry = retryUtc;
-                if (retry != DateTime.MinValue)
+                if (enabled && retry != DateTime.MinValue)
                 {
                     // A failing read retries slower each time instead of every 20 s
                     double ms = (retry - DateTime.UtcNow).TotalMilliseconds;
