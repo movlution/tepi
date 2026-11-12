@@ -46,6 +46,10 @@ namespace Tepi
         public List<DiffLine> Diff;
         public List<KeyValuePair<DiffLine, string>> DiffRows;
         public DateTime CreatedUtc = DateTime.UtcNow, ShownUtc;
+        // When the terminal stops waiting for this answer
+        public DateTime UntilUtc;
+        // Set only when the wait itself ran out (not when the agent went away)
+        public volatile bool TimedOut;
         // Stable handle for the phone link
         static int nextId;
         public readonly int Id = Interlocked.Increment(ref nextId);
@@ -221,14 +225,20 @@ namespace Tepi
                         return;
                     }
 
-                    ev.Approval = new Approval { SessionId = ev.SessionId };
+                    var deadline = DateTime.UtcNow.AddSeconds(waitSeconds);
+                    ev.Approval = new Approval { SessionId = ev.SessionId, UntilUtc = deadline };
                     try
                     {
                         Raise(ev);
-                        var deadline = DateTime.UtcNow.AddSeconds(waitSeconds);
                         while (!ev.Approval.Answered.WaitOne(250))
                         {
-                            if (DateTime.UtcNow > deadline || Gone(client))
+                            if (DateTime.UtcNow > deadline)
+                            {
+                                ev.Approval.TimedOut = true;
+                                if (ev.Approval.Answer(null)) Expire(ev.Approval);
+                                break;
+                            }
+                            if (Gone(client))
                             {
                                 if (ev.Approval.Answer(null)) Expire(ev.Approval);
                                 break;

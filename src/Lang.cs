@@ -1646,6 +1646,17 @@ namespace Tepi
             { "Saat sembunyi otomatis dan tidak ada jendela di depan", "When auto-hiding and no window is in front" },
             { "Tersambung, tanpa internet", "Connected, no internet" },
             { "Tetap tampil di desktop kosong", "Stay visible on an empty desktop" },
+            // Readability, notification failure, permission expiry, kept recordings
+            { "Pesan tidak bisa dibaca", "Messages can't be read" },
+            { "Notifikasi Windows tidak menjawab. Tepi mencoba lagi otomatis.", "Windows notifications aren't responding. Tepi retries automatically." },
+            { "Pesan tidak terbaca", "Messages unreadable" },
+            { "Coba lagi nanti", "Try again later" },
+            { "Izin kedaluwarsa", "Permission expired" },
+            { "{0} dtk", "{0} s" },
+            { "Rekaman rapat disimpan", "Meeting recording kept" },
+            { "Transkrip gagal; audionya tetap ada", "Transcript failed; the audio is kept" },
+            { "Transkrip rapat gagal ditulis, jadi rekaman audionya disimpan di sini.", "The meeting transcript could not be written, so the audio recording is kept here." },
+            { "Pesan: {0}", "Message: {0}" },
         };
 
         public static string T(string id)

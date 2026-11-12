@@ -66,6 +66,8 @@ namespace Tepi
             net.Changed += (a, b) => Post(() => OnNet(a, b));
             privacy.Changed += (m, c) => Post(() => OnPrivacy(m, c));
             notifWatcher.Updated += (access, list) => Post(() => OnNotifs(access, list));
+            // Read failures used to live only in the log; say it once, then stay quiet
+            notifWatcher.Failed += msg => Post(() => { ShowInfo(Ink.IcoBell, Lang.T("Pesan tidak terbaca"), Lang.T("Coba lagi nanti"), true); Kick(); });
             media.Start();
             volume.Start();
             net.Start();
@@ -908,9 +910,12 @@ namespace Tepi
 
         void DropApproval(Approval a)
         {
+            bool expired = a.TimedOut;
             approvals.Remove(a);
             PublishPhone();
             Kick();
+            // The card disappearing silently left the agent waiting in the terminal
+            if (expired) ShowInfo(Ink.IcoTerminal, Lang.T("Izin kedaluwarsa"), Lang.T("Jawab di terminal"), true);
         }
 
         void ReleaseApprovals()

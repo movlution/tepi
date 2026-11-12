@@ -1696,6 +1696,8 @@ namespace Tepi
             DropSpareGlass();
             ProfTick();
             MiniClock();
+            // Permission cards carry a live countdown
+            if (approvals.Count > 0) redraw = true;
             // Panel texts change by the minute
             if (redraw || (expanded && minute) || DesiredView() != current) Kick();
         }

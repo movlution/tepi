@@ -24,7 +24,8 @@ namespace Tepi
         public static Color Raised { get { return Ink.Light ? Color.White : O(Ink.Mix(Ink.Base.Bg, Ink.Base.Text, 0.3f)); } }
         public static Color Text { get { return O(Ink.Base.Text); } }
         public static Color Sub { get { return O(Ink.Mix(Ink.Base.Bg, Ink.Base.Text, 0.62f)); } }
-        public static Color Faint { get { return O(Ink.Mix(Ink.Base.Bg, Ink.Base.Text, 0.38f)); } }
+        // 0.57 keeps settings-window metadata above 4.5:1 (0.38 measured ~2.5-3.3:1)
+        public static Color Faint { get { return O(Ink.Mix(Ink.Base.Bg, Ink.Base.Text, 0.57f)); } }
         // Monochrome accent: switches use text colour
         public static Color Accent { get { return O(Ink.Base.Accent); } }
         public static Color OnAccent { get { return O(Ink.Base.OnAccent); } }

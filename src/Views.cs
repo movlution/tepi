@@ -573,8 +573,16 @@ namespace Tepi
             bool armed = (DateTime.UtcNow - a.ShownUtc).TotalSeconds >= ArmSeconds;
             string who = a.Project + (a.Profile.Length > 0 ? " · " + a.Profile : "");
             if (approvals.Count > 1) who = "1/" + approvals.Count + " · " + who;
+            var whoInk = p.T.Sub;
+            if (a.UntilUtc != default(DateTime))
+            {
+                // The terminal gives up after agent.wait; say how long is left
+                double left = Math.Max(0, (a.UntilUtc - DateTime.UtcNow).TotalSeconds);
+                who += " · " + Lang.F("{0} dtk", (int)Math.Ceiling(left));
+                if (left <= 15) whoInk = p.T.Negative;
+            }
             p.Text(a.Agent + Lang.T(" minta izin"), Ink.Semi(14.5f), p.T.Text, 24, 28, w - 200, StringAlignment.Near);
-            p.TextRight(who, Ink.Small(11.5f), p.T.Sub, w - 24, 28);
+            p.TextRight(who, Ink.Small(11.5f), whoInk, w - 24, 28);
             string label = AgentHub.ToolLabel(a.Tool);
             p.Text(label, Ink.Semi(12f), p.T.Text, 24, 51, 140, StringAlignment.Near);
             float lx = 24 + p.Measure(label, Ink.Semi(12f)) + 8;

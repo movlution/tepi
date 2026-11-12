@@ -39,7 +39,8 @@ namespace Tepi
                 Bg = Color.FromArgb(255, 0, 0, 0),
                 Text = Color.FromArgb(255, 245, 245, 247),
                 Sub = Color.FromArgb(158, 245, 245, 247),
-                Faint = Color.FromArgb(92, 245, 245, 247),
+                // 148/255 keeps tertiary text at 4.5:1 on the surface (was 2.96:1)
+                Faint = Color.FromArgb(148, 245, 245, 247),
                 Fill = Color.FromArgb(18, 255, 255, 255),
                 FillHover = Color.FromArgb(28, 255, 255, 255),
                 Line = Color.FromArgb(23, 255, 255, 255),
@@ -75,7 +76,7 @@ namespace Tepi
                 Bg = Color.FromArgb(255, 245, 245, 245),
                 Text = Color.FromArgb(255, 12, 12, 14),
                 Sub = Color.FromArgb(158, 12, 12, 14),
-                Faint = Color.FromArgb(92, 12, 12, 14),
+                Faint = Color.FromArgb(148, 12, 12, 14),
                 Fill = Color.FromArgb(14, 0, 0, 0),
                 FillHover = Color.FromArgb(24, 0, 0, 0),
                 Line = Color.FromArgb(24, 0, 0, 0),
@@ -148,8 +149,11 @@ namespace Tepi
             {
                 var c = accent.Value;
                 Base.Accent = Base.Progress = c;
-                // Dark ink on light accents
-                Base.OnAccent = c.R * 0.299 + c.G * 0.587 + c.B * 0.114 > 150 ? Color.FromArgb(255, 10, 10, 10) : Color.FromArgb(255, 250, 250, 250);
+                // Ink on the accent: pick whichever actually wins on WCAG contrast,
+                // not a luma guess. Blue and navy presets used to land at ~3.07:1.
+                var darkInk = Color.FromArgb(255, 10, 10, 10);
+                var lightInk = Color.FromArgb(255, 250, 250, 250);
+                Base.OnAccent = Island.Contrast(c, darkInk) >= Island.Contrast(c, lightInk) ? darkInk : lightInk;
             }
             Override(Base, "");
             Override(Flip, "card.");

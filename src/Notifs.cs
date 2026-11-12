@@ -192,11 +192,21 @@ namespace Tepi
     class NotifWatcher
     {
         public event Action<UserNotificationListenerAccessStatus, List<NotifItem>> Updated;
+        // Fires once per failure streak, not once per retry
+        public event Action<string> Failed;
 
         readonly AutoResetEvent wake = new AutoResetEvent(true);
+        readonly object state = new object();
         FileSystemWatcher watcher;
         string lastKey;
         volatile bool force = true, enabled = true;
+        int failures;
+        string failure;
+        DateTime retryUtc = DateTime.MinValue;
+
+        // The panel shows an error state instead of "no messages"
+        public bool Failing { get { lock (state) return failures > 0; } }
+        public string Error { get { lock (state) return failure; } }
 
         public void Start()
         {
@@ -225,30 +235,70 @@ namespace Tepi
 
         public bool Enabled { set { enabled = value; if (value) Refresh(); } }
 
-        public void Refresh() { force = true; wake.Set(); }
+        // User tapped "Coba lagi": drop the backoff and try at once
+        public void Refresh() { lock (state) retryUtc = DateTime.MinValue; force = true; wake.Set(); }
 
         void Run()
         {
             DateTime nextFull = DateTime.MinValue;
             while (true)
             {
-                if (wake.WaitOne(watcher != null ? 10000 : 1000)) Thread.Sleep(350);
+                int wait = watcher != null ? 10000 : 1000;
+                DateTime retry;
+                lock (state) retry = retryUtc;
+                if (retry != DateTime.MinValue)
+                {
+                    // A failing read retries slower each time instead of every 20 s
+                    double ms = (retry - DateTime.UtcNow).TotalMilliseconds;
+                    wait = (int)Math.Max(250, Math.Min(wait, ms));
+                }
+                if (wake.WaitOne(wait)) Thread.Sleep(350);
                 if (!enabled) continue;
+                lock (state) retry = retryUtc;
+                if (retry != DateTime.MinValue && DateTime.UtcNow < retry) continue;
+                // A pending backoff means "try again even if the DB key looks unchanged"
+                bool retryDue = retry != DateTime.MinValue;
                 try
                 {
                     string key = NotifSource.ChangeKey();
                     bool changed = key == null ? DateTime.UtcNow >= nextFull : key != lastKey;
-                    if (!force && !changed) continue;
+                    if (!force && !changed && !retryDue) continue;
                     force = false;
                     var access = NotifSource.Access();
                     List<NotifItem> list = access == UserNotificationListenerAccessStatus.Allowed ? NotifSource.Read() : null;
                     // Listing rewrites the DB; keep prior key
                     lastKey = key;
                     nextFull = DateTime.UtcNow.AddSeconds(20);
+                    bool wasFailing;
+                    lock (state)
+                    {
+                        wasFailing = failures > 0;
+                        failures = 0;
+                        failure = null;
+                        retryUtc = DateTime.MinValue;
+                    }
+                    if (wasFailing) Log.Write("notif read: recovered");
                     var h = Updated;
                     if (h != null) h(access, list);
                 }
-                catch (Exception ex) { Log.Write("notif read: " + ex.Message); }
+                catch (Exception ex)
+                {
+                    int n;
+                    lock (state)
+                    {
+                        failures++;
+                        n = failures;
+                        failure = ex.Message;
+                        // 10 s, 20 s, 40 s, 80 s, then 120 s
+                        retryUtc = DateTime.UtcNow.AddSeconds(Math.Min(120, 10 << Math.Min(4, n - 1)));
+                    }
+                    Log.Write("notif read: " + ex.Message);
+                    if (n == 1)
+                    {
+                        var f = Failed;
+                        if (f != null) f(ex.Message);
+                    }
+                }
             }
         }
     }

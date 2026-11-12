@@ -425,6 +425,13 @@ namespace Tepi
             }
             if (notifs.Count == 0)
             {
+                // A read failure is not an empty inbox; never claim "no messages" for it
+                if (notifWatcher.Failing)
+                {
+                    float fy = Empty(w, Ink.IcoBell, Lang.T("Pesan tidak bisa dibaca"), Lang.T("Notifikasi Windows tidak menjawab. Tepi mencoba lagi otomatis."));
+                    Button(new RectangleF(w / 2 - 80, fy, 160, 34), "notifRetry", Lang.T("Coba lagi"), false, delegate { notifWatcher.Refresh(); });
+                    return;
+                }
                 Empty(w, Ink.IcoBell, Lang.T("Belum ada pesan"), Lang.T("WhatsApp, Telegram, Discord, Teams, email"));
                 return;
             }

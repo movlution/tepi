@@ -132,6 +132,7 @@ namespace Tepi
                 case "deny": return Lang.T("Tolak");
                 case "always": return Lang.T("Selalu");
                 case "term": return Lang.T("Terminal");
+                case "notifRetry": return Lang.T("Coba lagi");
                 case "prefsOpen": return Lang.T("Pengaturan");
                 case "voiceFolder": return Lang.T("Folder rekaman");
                 case "clearVoice": return Lang.T("Kosongkan");
@@ -156,7 +157,14 @@ namespace Tepi
                 if (h.Id != focusId) continue;
                 var r = h.Rect;
                 r.Inflate(2, 2);
-                p.StrokeRound(r, Math.Min(12, r.Height / 2), p.T.Accent, 2f);
+                float radius = Math.Min(12, r.Height / 2);
+                // Two-tone ring: the outer band contrasts with the surface, the inner
+                // hairline contrasts with whatever fill sits under the focus. An
+                // accent-on-accent ring vanished on active tabs and primary buttons.
+                p.StrokeRound(r, radius, Ink.Flip.Bg, 3f);
+                var inner = r;
+                inner.Inflate(-1.5f, -1.5f);
+                p.StrokeRound(inner, Math.Max(2, radius - 1.5f), Ink.Flip.Text, 1.2f);
                 return;
             }
         }

@@ -129,20 +129,41 @@ namespace Tepi
                 mic.Dispose();
                 sys.Dispose();
                 foreach (var f in files) if (f != null) f.Dispose();
-                string path = null, error = null;
+                string path = null, error = null, kept = null;
                 try { path = WriteRapat(started, app, engine, lang, model, vocab, summary, out error); }
                 catch (Exception ex) { Log.Write("rapat tulis: " + ex); error = Lang.T("Transkrip gagal ditulis"); }
+                // No transcript: keep the audio instead of deleting the only copy
+                if (path == null)
+                {
+                    try { kept = KeepRapatAudio(started, error); }
+                    catch (Exception ex) { Log.Write("rapat simpan: " + ex.Message); }
+                }
                 try { Directory.Delete(RapatTmp, true); } catch (Exception) { }
-                Post(delegate { RapatWritten(path, error); });
+                Post(delegate { RapatWritten(path, error, kept); });
             });
         }
 
-        void RapatWritten(string path, string error)
+        void RapatWritten(string path, string error, string kept)
         {
             rapatWriting = false;
             transcriptsReadUtc = DateTime.MinValue;
             Kick();
-            if (path == null) { DictSay(error ?? Lang.T("Transkrip gagal ditulis"), "", true); return; }
+            if (path == null)
+            {
+                if (kept == null) { DictSay(error ?? Lang.T("Transkrip gagal ditulis"), "", true); return; }
+                // The transcript failed but the recording is safe
+                var keptToast = ShowToast(View.Info, 6, 3, true, true);
+                if (keptToast == null) return;
+                keptToast.Glyph = '\uE8A5';
+                keptToast.Title = Lang.T("Rekaman rapat disimpan");
+                keptToast.Detail = Lang.T("Transkrip gagal; audionya tetap ada");
+                keptToast.Page = PageVoice;
+                keptToast.Data = new Action(delegate
+                {
+                    try { Process.Start("explorer.exe", "\"" + kept + "\""); } catch (Exception ex) { Log.Write("buka rekaman: " + ex.Message); }
+                });
+                return;
+            }
             if (settings.GetBool("shelf", true)) AddToShelf(new[] { path });
             var t = ShowToast(View.Info, 4, 3, true, true);
             if (t == null) return;
@@ -150,6 +171,49 @@ namespace Tepi
             t.Title = Lang.T("Transkrip rapat siap");
             t.Detail = error ?? Lang.T("Klik untuk membuka");
             t.Data = new Action(delegate { try { Process.Start(path); } catch (Exception ex) { Log.Write("buka transkrip: " + ex.Message); } });
+        }
+
+        // Raw PCM tracks: how many seconds were actually recorded
+        double RapatAudioSeconds()
+        {
+            long bytes = 0;
+            foreach (var name in new[] { "kamu.pcm", "lawan.pcm" })
+            {
+                string p = Path.Combine(RapatTmp, name);
+                try { if (File.Exists(p)) bytes = Math.Max(bytes, new FileInfo(p).Length); } catch (Exception) { }
+            }
+            return bytes / 2.0 / Recorder.Rate;
+        }
+
+        // No transcript written: move the PCM tracks into a folder as playable WAV files.
+        // Returns the folder, or null when there is nothing worth keeping.
+        string KeepRapatAudio(DateTime started, string error)
+        {
+            double seconds = RapatAudioSeconds();
+            if (seconds < 3) return null;
+            Directory.CreateDirectory(RapatDir);
+            string baseName = "rekaman " + started.ToString("yyyy-MM-dd HH.mm");
+            string dir = Path.Combine(RapatDir, baseName);
+            for (int i = 2; Directory.Exists(dir); i++) dir = Path.Combine(RapatDir, baseName + " (" + i + ")");
+            Directory.CreateDirectory(dir);
+            foreach (var name in new[] { "kamu", "lawan" })
+            {
+                string pcm = Path.Combine(RapatTmp, name + ".pcm");
+                if (!File.Exists(pcm)) continue;
+                string wav = Path.Combine(dir, name + ".wav");
+                using (var fs = File.Create(wav))
+                {
+                    var head = Wav.Header(new FileInfo(pcm).Length);
+                    fs.Write(head, 0, head.Length);
+                    using (var src = File.OpenRead(pcm)) src.CopyTo(fs);
+                }
+            }
+            var note = new StringBuilder();
+            note.AppendLine(Lang.T("Transkrip rapat gagal ditulis, jadi rekaman audionya disimpan di sini."));
+            note.AppendLine(Lang.F("Durasi {0}. Kamu = mikrofon laptop ini, Lawan bicara = suara dari speaker atau headset.", Clock(seconds)));
+            if (!string.IsNullOrEmpty(error)) note.AppendLine(Lang.F("Pesan: {0}", error));
+            File.WriteAllText(Path.Combine(dir, "catatan.txt"), note.ToString(), new UTF8Encoding(false));
+            return dir;
         }
 
         class Line
