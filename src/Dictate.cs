@@ -385,7 +385,13 @@ namespace Tepi
             if (gone || blocked || GetAncestor(GetForegroundWindow(), 3) != target)
             {
                 // Can't type there: clipboard only
-                try { Clipboard.SetText(text); } catch (Exception) { }
+                try { Clipboard.SetText(text); }
+                catch (Exception ex)
+                {
+                    Log.Write("dikte clipboard saja: " + ex.Message);
+                    DictSay(Lang.T("Gagal menyalin, coba lagi"), "", true);
+                    return;
+                }
                 DictSay(Lang.T("Teks disalin"), blocked ? Lang.T("Jendela admin, tempel sendiri dengan Ctrl+V") : Lang.T("Jendela berganti, tempel dengan Ctrl+V"), true);
                 return;
             }

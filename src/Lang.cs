@@ -680,6 +680,7 @@ namespace Tepi
             { "Membaca teks…", "Reading text…" },
             { "Tidak ada teks terbaca", "No readable text" },
             { "Teks disalin", "Text copied" },
+            { "Gagal menyalin, coba lagi", "Copy failed, try again" },
             { "{0} baris", "{0} lines" },
             { "Salin teks", "Copy text" },
             { "Keluarkan {0} yang dipilih", "Remove the {0} selected" },
