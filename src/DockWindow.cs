@@ -32,7 +32,7 @@ namespace Tepi
             bool registered, shown = true, closing;
             const int AppBarMsg = Native.WM_APP + 0x32;
             static readonly int ShellMsg = Taskbar.RegisterWindowMessage("SHELLHOOK"), FrameMsg = Taskbar.RegisterWindowMessage("TepiDockFrame");
-            readonly Timer tick = new Timer { Interval = 1000 }, dwell = new Timer { Interval = 420 }, hideLater = new Timer { Interval = 700 };
+            readonly Timer tick = new Timer { Interval = 1000 }, dwell = new Timer { Interval = 420 }, hideLater = new Timer { Interval = 700 }, revealLater = new Timer();
             readonly Stopwatch clock = Stopwatch.StartNew();
             double lastT;
             DockPacer pacer;
@@ -91,6 +91,7 @@ namespace Tepi
                 tick.Tick += delegate { Tick(); };
                 dwell.Tick += delegate { dwell.Stop(); Dwell(); };
                 hideLater.Tick += delegate { hideLater.Stop(); AutoHide(); };
+                revealLater.Tick += delegate { revealLater.Stop(); RevealNow(); };
                 trayPop.Tick += delegate { TrayPopup(); };
                 Tune(labelShow, 520, 0.9f);
             }
@@ -149,6 +150,7 @@ namespace Tepi
                 tick.Stop();
                 dwell.Stop();
                 hideLater.Stop();
+                revealLater.Stop();
                 DeregisterShellHookWindow(Handle);
                 if (pacer != null) pacer.Stop();
                 if (frost != null) frost.Stop();
@@ -576,13 +578,39 @@ namespace Tepi
                 finally { pacer.Done(more); }
             }
 
-            // Auto-hide: the edge brings it back
+            // Auto-hide: the edge brings it back, after an optional wait
             void Reveal(bool on)
             {
                 if (on) hideLater.Stop();
+                revealLater.Stop();
                 wantShown = on;
                 reveal.Target = on ? 1 : 0;
                 Animate();
+            }
+
+            // Milliseconds the pointer must rest on the edge before the dock rises
+            int RevealDelay { get { return Math.Max(0, Math.Min(2000, S.GetInt("dockbar.revealdelay", 0))); } }
+
+            // Pointer reached a hidden dock: wait, unless the wait is off
+            internal void HoverReveal()
+            {
+                revealLater.Stop();
+                if (wantShown || closing) return;
+                int wait = RevealDelay;
+                if (wait <= 0) { Reveal(true); return; }
+                revealLater.Interval = wait;
+                revealLater.Start();
+            }
+
+            // Pointer left, or something else already showed the dock
+            internal void CancelHoverReveal() { revealLater.Stop(); }
+
+            // The wait is over: only rise if the pointer is still resting there
+            void RevealNow()
+            {
+                if (closing || wantShown || HideMode == "never") return;
+                if (!Bounds.Contains(Cursor.Position)) return;
+                Reveal(true);
             }
 
             void AutoHide()

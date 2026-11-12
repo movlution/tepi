@@ -80,7 +80,8 @@ namespace Tepi
                     inside = true;
                     hover.Target = 1;
                     hideLater.Stop();
-                    if (!wantShown) Reveal(true);
+                    // Hidden dock: honour the user's edge wait before rising
+                    HoverReveal();
                 }
                 if (pressId != null && e.Button == MouseButtons.Left && dragApp == null && AppById(pressId) != null && Far(e.Location, downAt)) BeginDrag(AppById(pressId), pt);
                 if (dragApp != null) { DragMove(pt); Animate(); return; }
@@ -137,6 +138,9 @@ namespace Tepi
                 pressId = id;
                 downAt = e.Location;
                 dwell.Stop();
+                // A deliberate click skips the wait
+                CancelHoverReveal();
+                Reveal(true);
                 if (id != null && id.StartsWith("tray:", StringComparison.Ordinal)) TrayDown(id, e.Button);
                 Render();
             }

@@ -56,6 +56,11 @@ namespace Tepi
                 });
                 hideSeg.Enabled = on;
                 add(Row(Lang.T("Sembunyikan dock"), Lang.T("Muncul lagi saat kursor menyentuh tepi bawah"), hideSeg));
+                var revealDelay = Slider(0, 2000, 100, Math.Max(0, Math.Min(2000, settings.GetInt("dockbar.revealdelay", 0))),
+                    v => v == 0 ? Lang.T("Langsung") : v + " ms",
+                    v => { settings.Set("dockbar.revealdelay", v); settings.Save(); });
+                revealDelay.Enabled = on && hide != "never";
+                add(Row(Lang.T("Jeda sebelum muncul"), Lang.T("Berapa lama kursor harus berhenti di tepi bawah; klik tepi tetap langsung membuka"), revealDelay));
                 var onDesk = Switch("dockbar.desktop", true, null);
                 onDesk.Enabled = on && hide == "auto";
                 add(Row(Lang.T("Tetap tampil di desktop kosong"), Lang.T("Saat sembunyi otomatis dan tidak ada jendela di depan"), onDesk));

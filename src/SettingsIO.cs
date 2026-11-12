@@ -17,7 +17,7 @@ namespace Tepi
             "agent.wait", "agent.quota", "update.check", "accent", "monitor", "focus.break", "dock", "position", "panel.width", "panel.tabs",
             "place", "place.inset", "place.y", "home.cards", "home.sort", "tabs.trigger",
             "dockbar.on", "dockbar.replace", "dockbar.reserve", "dockbar.magnify", "dockbar.pins", "dockbar.work",
-            "dockbar.w.clock", "dockbar.w.media", "dockbar.w.ai", "dockbar.w.timer", "dockbar.w.weather", "dockbar.w.battery", "dockbar.w.system", "dockbar.style", "dockbar.size", "dockbar.mag", "dockbar.hide", "dockbar.previews", "dockbar.badges", "dockbar.search", "dockbar.taskview", "dockbar.capture",
+            "dockbar.w.clock", "dockbar.w.media", "dockbar.w.ai", "dockbar.w.timer", "dockbar.w.weather", "dockbar.w.battery", "dockbar.w.system", "dockbar.style", "dockbar.size", "dockbar.mag", "dockbar.hide", "dockbar.revealdelay", "dockbar.previews", "dockbar.badges", "dockbar.search", "dockbar.taskview", "dockbar.capture",
             "panel.first", "panel.open", "panel.delay", "tabs.style", "mini", "mini.notif", "island.eyes", "island.follow", "idle.face", "island.except",
             "prompter.wpm", "prompter.size", "prompter.mirror", "prompter.width", "prompter.height", "prompter.bg", "lang", "capture.show",
             "a11y.announce", "clipboard", "downloads", "class.island", "shelf", "shelf.keep", "shelf.expire", "convert", "shots", "drives",
