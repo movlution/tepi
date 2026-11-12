@@ -436,15 +436,9 @@ namespace Tepi
             foreach (var n in items) notifs.Remove(n);
             unread = Math.Min(unread, notifs.Count);
             Kick();
-            var ids = items.FindAll(n => !n.Held).ConvertAll(n => n.Id);
-            ThreadPool.QueueUserWorkItem(delegate
-            {
-                foreach (var id in ids)
-                {
-                    try { NotifSource.Remove(id); } catch (Exception ex) { Log.Write("notif remove: " + ex.Message); }
-                }
-                notifWatcher.Refresh();
-            });
+            // Remember them, or the next read puts them straight back
+            NotifSource.Dismiss(items);
+            notifWatcher.Refresh();
         }
 
         // Agents

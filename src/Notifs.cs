@@ -17,6 +17,8 @@ namespace Tepi
     {
         public uint Id;
         public string AppId = "", AppName = "", Title = "", Body = "";
+        // Toast identifier inside its app; needed to drop it from Action Center
+        public string Tag = "", Group = "";
         public DateTime Time;
         public bool Chat, Held;
         public Bitmap Logo;
@@ -63,7 +65,12 @@ namespace Tepi
         }
 
         // Packaged builds talk to the listener; loose builds read the database
-        public static List<NotifItem> Read() { return Packaged ? ReadWinRt() : ReadDb(); }
+        public static List<NotifItem> Read()
+        {
+            var list = Packaged ? ReadWinRt() : ReadDb();
+            // A cleared toast stays cleared even while the database still holds it
+            return list.FindAll(n => !IsDismissed(n.Id, n.AppId, n.Tag));
+        }
 
         public static List<NotifItem> ReadWinRt()
         {
@@ -100,13 +107,87 @@ namespace Tepi
             return list;
         }
 
-        // Without a package the listener cannot drop a toast; Windows expires it instead
-        public static bool CanRemove { get { return Packaged; } }
+        // Clearing works on Tepi's own list for any build: the listener can only drop
+        // toasts for a packaged process, and this is the only path that always works
+        public static bool CanRemove { get { return true; } }
 
+        static readonly object dismissedGate = new object();
+        static HashSet<string> dismissed;
+
+        static string DismissFile { get { return Path.Combine(Settings.Dir, "notif-dismissed.txt"); } }
+
+        // One line per cleared toast, so it stays gone after the DB still holds it
+        static HashSet<string> Dismissed
+        {
+            get
+            {
+                lock (dismissedGate)
+                {
+                    if (dismissed != null) return dismissed;
+                    dismissed = new HashSet<string>(StringComparer.Ordinal);
+                    try
+                    {
+                        if (File.Exists(DismissFile))
+                            foreach (var line in File.ReadAllLines(DismissFile))
+                                if (line.Length > 0) dismissed.Add(line);
+                    }
+                    catch (Exception ex) { Log.Write("notif dismissed read: " + ex.Message); }
+                    return dismissed;
+                }
+            }
+        }
+
+        public static string Sign(uint id, string appId, string tag) { return id + "\t" + appId + "\t" + tag; }
+
+        public static bool IsDismissed(uint id, string appId, string tag)
+        {
+            lock (dismissedGate) return Dismissed.Contains(Sign(id, appId, tag));
+        }
+
+        public static void Dismiss(IEnumerable<NotifItem> items)
+        {
+            bool changed = false;
+            lock (dismissedGate)
+            {
+                var set = Dismissed;
+                foreach (var n in items) if (set.Add(Sign(n.Id, n.AppId, n.Tag))) changed = true;
+                if (!changed) return;
+                try
+                {
+                    // Bounded: only the newest ids ever reappear
+                    var lines = new List<string>(set);
+                    if (lines.Count > 400) lines.RemoveRange(0, lines.Count - 400);
+                    Directory.CreateDirectory(Settings.Dir);
+                    File.WriteAllLines(DismissFile, lines.ToArray());
+                }
+                catch (Exception ex) { Log.Write("notif dismissed write: " + ex.Message); }
+            }
+            // Action Center is best effort; the local list already dropped it
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                foreach (var n in items) DropFromHistory(n);
+            });
+        }
+
+        // Packaged only: the listener refuses to touch toasts without package identity
         public static void Remove(uint id)
         {
-            if (!CanRemove) return;
+            if (!Packaged) return;
             UserNotificationListener.Current.RemoveNotification(id);
+        }
+
+        // Same-package rule means this usually fails for other apps; never report it
+        static void DropFromHistory(NotifItem n)
+        {
+            if (n.AppId.Length == 0) return;
+            try
+            {
+                if (n.Tag.Length > 0)
+                    ToastNotificationManager.History.Remove(n.Tag, n.Group.Length > 0 ? n.Group : "", n.AppId);
+                else
+                    ToastNotificationManager.History.Clear(n.AppId);
+            }
+            catch (Exception ex) { Log.Write("notif history drop: " + ex.GetType().Name); }
         }
 
         // Direct read of wpndatabase.db: no permission, no WinRT, no hang
@@ -124,7 +205,7 @@ namespace Tepi
             {
                 IntPtr stmt;
                 // Handler row turns the toast's HandlerId into an app id
-                const string sql = "select n.Id, n.Payload, n.ArrivalTime, coalesce(hh.PrimaryId, '') from Notification n " +
+                const string sql = "select n.Id, n.Payload, n.ArrivalTime, coalesce(hh.PrimaryId, ''), n.Tag, n.[Group] from Notification n " +
                                    "left join NotificationHandler hh on hh.RecordId = n.HandlerId " +
                                    "where n.Type = 'toast' order by n.Id desc limit 60";
                 if (sqlite3_prepare16_v2(h, sql, -1, out stmt, IntPtr.Zero) != 0) return list;
@@ -142,6 +223,8 @@ namespace Tepi
                         ParseToast(payload, item);
                         if (item.Title.Length == 0 && item.Body.Length == 0) continue;
                         if (item.AppName.Length == 0) item.AppName = NiceAppId(item.AppId);
+                        item.Tag = Column16(stmt, 4) ?? "";
+                        item.Group = Column16(stmt, 5) ?? "";
                         item.Chat = IsChat(item.AppId + " " + item.AppName, item.Title + " " + item.Body);
                         item.Logo = LogoForId(item.AppId);
                         list.Add(item);
