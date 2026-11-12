@@ -741,21 +741,15 @@ namespace Tepi
                 return r;
             }
 
-            // Typed city with suggestions; a place outside the list comes from search
+            // Plain input: no dropdown of any kind, the box is the whole control
             KitRow CityRow()
             {
                 var f = new KitField(Ui, false, Lang.T("Ketik kota atau kabupaten"), 60);
                 f.Box.Text = Cities.NameOf(settings.Get("pray.city", ""));
-                var items = new List<string>();
-                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var c in Cities.List) if (seen.Add((string)c[0])) items.Add((string)c[0]);
-                var row = Row(Lang.T("Kota"), Lang.T("Ketik untuk mencari, atau cari lokasi lain"), f);
-
-                var suggest = new AutoCompleteStringCollection();
-                suggest.AddRange(items.ToArray());
-                f.Box.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
-                f.Box.AutoCompleteSource = AutoCompleteSource.CustomSource;
-                f.Box.AutoCompleteCustomSource = suggest;
+                var row = Row(Lang.T("Kota"), Lang.T("Ketik nama kota atau kabupaten, lalu Enter"), f);
+                // Autocomplete would paint a Windows dropdown over the ring
+                f.Box.AutoCompleteMode = AutoCompleteMode.None;
+                f.Box.AutoCompleteSource = AutoCompleteSource.None;
 
                 Action save = delegate
                 {

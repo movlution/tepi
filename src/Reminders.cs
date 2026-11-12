@@ -871,7 +871,8 @@ namespace Tepi
         readonly List<string> names = new List<string>();
         readonly Action<string> done;
         readonly string[] list;
-        int at;
+        // Suggestion shown as one line of hint text, never as a dropdown
+        string guess = "";
         string status = "";
         bool busy;
 
@@ -887,6 +888,7 @@ namespace Tepi
             box.BorderStyle = BorderStyle.None;
             box.Text = current ?? "";
             box.KeyDown += TypeKeys;
+            box.TextChanged += delegate { guess = First(Box()); Invalidate(); };
             Controls.Add(box);
             Deactivate += delegate { if (!IsDisposed) Close(); };
         }
@@ -922,29 +924,31 @@ namespace Tepi
             box.SelectAll();
         }
 
-        // Up and down walk the matching names, Enter takes the box, Esc leaves
+        string Box() { return (box.Text ?? "").Trim(); }
+
+        // First matching name, for the hint line only
+        string First(string typed)
+        {
+            if (typed.Length == 0) return "";
+            foreach (var n in list)
+                if (n.StartsWith(typed, StringComparison.OrdinalIgnoreCase)) return n;
+            foreach (var n in list)
+                if (n.IndexOf(typed, StringComparison.OrdinalIgnoreCase) >= 0) return n;
+            return "";
+        }
+
+        // Tab takes the suggestion, Enter takes what was typed, Esc leaves
         void TypeKeys(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Escape) { e.SuppressKeyPress = true; Close(); return; }
             if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; Commit(); return; }
-            if (e.KeyCode != Keys.Down && e.KeyCode != Keys.Up) return;
+            if (e.KeyCode != Keys.Tab || guess.Length == 0) return;
             e.SuppressKeyPress = true;
-            var hits = Matches(box.Text);
-            if (hits.Count == 0) return;
-            at = e.KeyCode == Keys.Down ? Math.Min(at + 1, hits.Count - 1) : Math.Max(at - 1, 0);
-            box.Text = hits[at];
+            box.Text = guess;
             box.SelectionStart = box.Text.Length;
+            guess = "";
             status = "";
             Invalidate();
-        }
-
-        List<string> Matches(string typed)
-        {
-            var hits = new List<string>();
-            typed = (typed ?? "").Trim();
-            if (typed.Length == 0) { hits.AddRange(list); return hits; }
-            foreach (var n in list) if (n.IndexOf(typed, StringComparison.OrdinalIgnoreCase) >= 0) hits.Add(n);
-            return hits;
         }
 
         void Commit()
@@ -1003,11 +1007,13 @@ namespace Tepi
             }
         }
 
-        // What Enter will do, said plainly
+        // One line: the suggestion if there is one, otherwise what Enter will do
         string Hint()
         {
-            string typed = (box.Text ?? "").Trim();
-            if (typed.Length == 0) return Lang.T("Ketik untuk menyaring; Enter memakai kota ini");
+            string typed = Box();
+            if (typed.Length == 0) return Lang.T("Ketik nama kota, lalu Enter");
+            if (guess.Length > 0 && !string.Equals(guess, typed, StringComparison.OrdinalIgnoreCase))
+                return Lang.T("Tab memakai ") + guess;
             if (Cities.Find(typed) != null) return Lang.T("Enter memakai ") + typed;
             return Lang.T("Enter mencari ") + "\"" + typed + "\"";
         }
