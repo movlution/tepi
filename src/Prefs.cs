@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
@@ -740,6 +741,73 @@ namespace Tepi
                 return r;
             }
 
+            // Typed city with suggestions; a place outside the list comes from search
+            KitRow CityRow()
+            {
+                var f = new KitField(Ui, false, Lang.T("Ketik kota atau kabupaten"), 60);
+                f.Box.Text = Cities.NameOf(settings.Get("pray.city", ""));
+                var items = new List<string>();
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var c in Cities.List) if (seen.Add((string)c[0])) items.Add((string)c[0]);
+                var row = Row(Lang.T("Kota"), Lang.T("Ketik untuk mencari, atau cari lokasi lain"), f);
+
+                var suggest = new AutoCompleteStringCollection();
+                suggest.AddRange(items.ToArray());
+                f.Box.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+                f.Box.AutoCompleteSource = AutoCompleteSource.CustomSource;
+                f.Box.AutoCompleteCustomSource = suggest;
+
+                Action save = delegate
+                {
+                    string typed = (f.Box.Text ?? "").Trim();
+                    if (typed.Length == 0) return;
+                    // A listed name is stored as before; anything else is looked up
+                    var known = Cities.Find(typed);
+                    if (known != null)
+                    {
+                        settings.Set("pray.city", (string)known[0]);
+                        settings.Save();
+                        island.prayToday = null;
+                        island.Kick();
+                        return;
+                    }
+                    row.Detail = Lang.T("Mencari lokasi…");
+                    row.Invalidate();
+                    System.Threading.ThreadPool.QueueUserWorkItem(delegate
+                    {
+                        string error;
+                        var hits = Cities.Search(typed, out error);
+                        BeginInvoke(new Action(delegate
+                        {
+                            if (hits.Count == 0)
+                            {
+                                row.Detail = error != null ? Lang.T("Pencarian gagal, coba lagi") : Lang.T("Lokasi tidak ditemukan");
+                                row.Invalidate();
+                                return;
+                            }
+                            // First match wins: it is the closest name match from the service
+                            var hit = hits[0];
+                            string packed = Cities.Pack((string)hit[0], Convert.ToDouble(hit[1]), Convert.ToDouble(hit[2]), Convert.ToDouble(hit[3]));
+                            Cities.Remember(packed);
+                            settings.Set("pray.city", packed);
+                            settings.Save();
+                            f.Box.Text = (string)hit[0];
+                            row.Detail = (string)hit[0] + " · " + Convert.ToDouble(hit[1]).ToString("0.###", CultureInfo.InvariantCulture) + ", " +
+                                         Convert.ToDouble(hit[2]).ToString("0.###", CultureInfo.InvariantCulture);
+                            row.Invalidate();
+                            island.prayToday = null;
+                            island.Kick();
+                            // Weather and the ring follow the new coordinates
+                            Relayout();
+                        }));
+                    });
+                };
+
+                f.Submit = save;
+                f.Box.Leave += delegate { if (!building) save(); };
+                return row;
+            }
+
             // Controls with settings plumbing
 
             KitSwitch Switch(string key, bool fallback, Action<bool> after)
@@ -1301,21 +1369,20 @@ namespace Tepi
                         Integrations(add, cap, show);
                         break;
                     case "remind":
-                        var cities = new List<string>();
-                        int cityAt = 0;
-                        string city = settings.Get("pray.city", "");
-                        foreach (var c in Cities.List) { if ((string)c[0] == city) cityAt = cities.Count; cities.Add((string)c[0]); }
+                        var cities = Cities.Names();
+                        string city = Cities.NameOf(settings.Get("pray.city", ""));
+                        string cityRaw = settings.Get("pray.city", "");
                         cap(Lang.T("Ibadah"));
                         add(Row(Lang.T("Sholat"), Lang.T("Dihitung di laptop ini, metode Kemenag"), Switch("pray", false, on =>
                         {
-                            if (on && city.Length == 0) settings.Set("pray.city", cities[cityAt]);
+                            if (on && cityRaw.Length == 0) settings.Set("pray.city", cities[0]);
                             settings.Set("pray", on);
                             settings.Save();
                             island.prayToday = null;
                             island.Kick();
                             BeginInvoke(new Action(Relayout));
                         })));
-                        add(Row(Lang.T("Kota"), null, Popup(cities.ToArray(), cityAt, i => { settings.Set("pray.city", cities[i]); settings.Save(); island.prayToday = null; island.Kick(); })));
+                        add(CityRow());
                         var weatherSw = Switch("weather", false, null);
                         weatherSw.Enabled = island.PrayCity() != null;
                         add(Row(Lang.T("Cuaca dan hujan"), weatherSw.Enabled ? Lang.T("Suhu di Ringkasan dan peringatan hujan, dari Open-Meteo") : Lang.T("Pilih kota dulu"), weatherSw));
