@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -758,17 +758,25 @@ namespace Tepi
                 {
                     if (building) return;
                     var hits = Cities.Suggest(f.Box.Text, 8);
-                    if (hits.Count == 0) { if (suggest != null) { suggest.Hide(); suggest = null; } return; }
-                    if (suggest == null || suggest.IsDisposed) suggest = new CitySuggest(Ui);
+                    if (hits.Count == 0) { if (suggest != null) suggest.Hide2(); return; }
+                    // Child of this window, so showing it cannot take the caret
+                    if (suggest == null || suggest.IsDisposed)
+                    {
+                        suggest = new CitySuggest(Ui);
+                        var host = f.Box.Parent;
+                        while (host != null && host.Parent != null) host = host.Parent;
+                        if (host == null) return;
+                        host.Controls.Add(suggest);
+                        suggest.BringToFront();
+                    }
                     suggest.Bind(hits.ToArray());
-                    var at = f.Box.PointToScreen(new Point(0, f.Box.Height + 4));
-                    suggest.ShowAt(at, f.Box.Width, delegate(string picked)
+                    suggest.ShowUnder(f.Box, delegate(string picked)
                     {
                         // Picking fills the box and commits straight away
                         f.Box.Text = picked;
                         f.Box.SelectionStart = f.Box.Text.Length;
                         save();
-                        if (suggest != null) { suggest.Close2(); suggest = null; }
+                        if (suggest != null) suggest.Hide2();
                     });
                 };
 
@@ -776,20 +784,20 @@ namespace Tepi
                 f.Box.KeyDown += delegate(object s, KeyEventArgs e)
                 {
                     if (suggest == null || !suggest.Visible) return;
-                    if (e.KeyCode == Keys.Escape) { e.SuppressKeyPress = true; suggest.Close2(); suggest = null; return; }
+                    if (e.KeyCode == Keys.Escape) { e.SuppressKeyPress = true; suggest.Hide2(); suggest = null; return; }
                     if (e.KeyCode != Keys.Enter) return;
                     var hits = Cities.Suggest(f.Box.Text, 1);
                     if (hits.Count == 0) return;
                     e.SuppressKeyPress = true;
                     string pick = hits[0];
-                    suggest.Close2();
+                    suggest.Hide2();
                     suggest = null;
                     f.Box.Text = pick;
                     f.Box.SelectionStart = f.Box.Text.Length;
                     save();
                 };
                 // Leaving the box dismisses it; the list never held the caret anyway
-                f.Box.Leave += delegate { if (suggest != null) { suggest.Close2(); suggest = null; } };
+                f.Box.Leave += delegate { if (suggest != null) { suggest.Hide2(); suggest = null; } };
 
                 save = delegate
                 {
@@ -1939,8 +1947,9 @@ namespace Tepi
         }
     }
 
-    // Small pickable list under a text box: a dropdown you choose from, not a hint line
-    class CitySuggest : Form
+    // Sits inside the settings window as a child control: a child can never take
+    // focus away from the text box the way a separate top-level window did
+    class CitySuggest : Panel
     {
         readonly float ui;
         string[] items = new string[0];
@@ -1950,57 +1959,57 @@ namespace Tepi
         public CitySuggest(float ui)
         {
             this.ui = ui;
-            FormBorderStyle = FormBorderStyle.None;
-            ShowInTaskbar = false;
-            TopMost = true;
-            StartPosition = FormStartPosition.Manual;
-            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            BackColor = KitInk.Window;
+            // Never a tab stop, never focusable, so typing never leaves the box
+            TabStop = false;
+            SetStyle(ControlStyles.Selectable, false);
+            Visible = false;
         }
 
-        // Never take the caret away from the box that opened this list
-        protected override bool ShowWithoutActivation { get { return true; } }
-
-        protected override CreateParams CreateParams
-        {
-            get
-            {
-                var cp = base.CreateParams;
-                cp.ClassStyle |= 0x20000;
-                cp.ExStyle |= 0x00000080;   // WS_EX_TOOLWINDOW: no taskbar button
-                cp.ExStyle |= 0x08000000;   // WS_EX_NOACTIVATE: typing stays in the box
-                return cp;
-            }
-        }
-
-        public bool Showing { get { return Visible; } }
+        protected override bool IsInputKey(Keys key) { return false; }
 
         public void Bind(string[] names)
         {
             items = names ?? new string[0];
             hot = -1;
-            Height = (int)((Math.Min(items.Length, 8) * 30 + 10) * ui);
+            Height = (int)((Math.Min(items.Length, 8) * 30 + 8) * ui);
             Invalidate();
         }
 
-        public void ShowAt(Point screen, int width, Action<string> onPick)
+        // Placement is in the parent's own coordinates, so no screen maths
+        public void ShowUnder(Control anchor, Action<string> onPick)
         {
             picked = onPick;
-            Width = Math.Max(width, (int)(240 * ui));
-            if (!Visible) Show();
-            Location = screen;
+            var host = Parent;
+            if (host == null) return;
+            int x = anchor.Left;
+            int y = anchor.Bottom + (int)(4 * ui);
+            Width = Math.Max(anchor.Width, (int)(240 * ui));
+            // Keep it inside the window it belongs to
+            if (x + Width > host.ClientSize.Width - 8) x = Math.Max(8, host.ClientSize.Width - Width - 8);
+            if (y + Height > host.ClientSize.Height - 8) y = anchor.Top - Height - (int)(4 * ui);
+            Location = new Point(x, Math.Max(4, y));
+            Visible = true;
+            BringToFront();
             Invalidate();
         }
 
-        // Not activated, so Deactivate never fires: the owner closes it instead
-        public void Close2() { Hide(); }
+        public void Hide2() { Visible = false; }
 
-        protected override void OnPaintBackground(PaintEventArgs e)
+        protected override void OnPaintBackground(PaintEventArgs e) { }
+
+        protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
             KitInk.Smooth(g);
-            g.Clear(KitInk.Window);
-            using (var pen = new Pen(KitInk.Line, 1f))
-                g.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
+            // Rounded card with a hairline, drawn over whatever is behind
+            var all = new RectangleF(0, 0, Width, Height);
+            using (var path = Ink.Round(all, 10 * ui))
+            {
+                using (var b = new SolidBrush(KitInk.Window)) g.FillPath(b, path);
+                using (var pen = new Pen(KitInk.Line, 1f)) g.DrawPath(pen, path);
+            }
             var text = new SolidBrush(KitInk.Text);
             var hover = new SolidBrush(KitInk.Hover);
             try
@@ -2009,7 +2018,7 @@ namespace Tepi
                 {
                     for (int i = 0; i < items.Length; i++)
                     {
-                        int y = (int)((i * 30 + 5) * ui);
+                        int y = (int)((i * 30 + 4) * ui);
                         var r = new Rectangle((int)(4 * ui), y, Width - (int)(8 * ui), (int)(30 * ui));
                         if (i == hot) g.FillRectangle(hover, r);
                         g.DrawString(items[i], f, text, r.X + (int)(10 * ui), r.Y + r.Height / 2 - f.Height / 2);
@@ -2021,7 +2030,7 @@ namespace Tepi
 
         int RowAt(Point p)
         {
-            int i = (int)((p.Y / ui - 5) / 30);
+            int i = (int)((p.Y / ui - 4) / 30);
             return i >= 0 && i < items.Length ? i : -1;
         }
 
@@ -2044,8 +2053,9 @@ namespace Tepi
             int at = RowAt(e.Location);
             if (at < 0 || picked == null) return;
             string pick = items[at];
-            Hide();
+            Visible = false;
             picked(pick);
         }
     }
 }
+
