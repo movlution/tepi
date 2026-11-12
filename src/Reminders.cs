@@ -147,14 +147,6 @@ namespace Tepi
             return hits;
         }
 
-        // One line for a row's detail: the matches, or nothing when too short
-        public static string Hint(string typed)
-        {
-            if ((typed ?? "").Trim().Length < 1) return "";
-            var hits = Suggest(typed, 3);
-            return hits.Count == 0 ? "" : string.Join(" · ", hits.ToArray());
-        }
-
         // Built-in names first, then anything already searched and saved
         public static List<string> Names()
         {
@@ -815,118 +807,9 @@ namespace Tepi
             return left.TotalSeconds - Math.Floor(left.TotalMinutes) * 60 + 0.02;
         }
 
-        // Typed inside the island itself: the field is part of the notch
-        void CityMenu() { BeginCityTyping(); }
+        // The city is chosen in Settings; the island just opens that page
+        void CityMenu() { OpenPrefs("remind"); }
 
-        const int CityMax = 40;
-
-        internal bool cityTyping;
-        string cityText = "", cityStatus = "";
-        bool cityBusy;
-
-        internal void BeginCityTyping()
-        {
-            cityTyping = true;
-            cityText = Cities.NameOf(settings.Get("pray.city", ""));
-            cityStatus = "";
-            cityBusy = false;
-            // Layers cannot take focus by clicking, but the foreground window can be asked
-            Native.SetForegroundWindow(Handle);
-            Kick();
-        }
-
-        internal void EndCityTyping(bool commit)
-        {
-            if (!cityTyping) return;
-            string typed = cityText.Trim();
-            cityTyping = false;
-            cityText = "";
-            cityStatus = "";
-            Kick();
-            if (commit && typed.Length > 0) ApplyCity(typed);
-        }
-
-        // True when the key belonged to the field
-        internal bool CityCommand(Keys key)
-        {
-            if (!cityTyping) return false;
-            switch (key & Keys.KeyCode)
-            {
-                case Keys.Escape: EndCityTyping(false); return true;
-                case Keys.Enter: EndCityTyping(true); return true;
-                case Keys.Back:
-                    if (cityText.Length > 0) cityText = cityText.Substring(0, cityText.Length - 1);
-                    Kick();
-                    return true;
-                case Keys.Tab:
-                    var pick = Cities.Suggest(cityText, 1);
-                    if (pick.Count > 0) { cityText = pick[0]; Kick(); }
-                    return true;
-            }
-            return true; // swallow the rest so island navigation does not fire mid-typing
-        }
-
-        // True when the character was inserted
-        internal bool CityTyped(char ch)
-        {
-            if (!cityTyping) return false;
-            if (ch == '\r' || ch == '\n' || ch == '\b' || ch == 0x1B) return true;
-            if (ch < ' ' || ch == 0x7F) return true;
-            if (cityText.Length >= CityMax) return true;
-            cityText += ch;
-            cityStatus = "";
-            Kick();
-            return true;
-        }
-
-        void ApplyCity(string typed)
-        {
-            var known = Cities.Find(typed);
-            if (known != null)
-            {
-                settings.Set("pray.city", (string)known[0]);
-                settings.Set("pray", true);
-                settings.Save();
-                prayToday = null;
-                weatherAskedUtc = DateTime.MinValue;
-                TickWeather();
-                Kick();
-                return;
-            }
-            if (cityBusy) return;
-            cityBusy = true;
-            cityTyping = true;
-            cityText = typed;
-            cityStatus = Lang.T("Mencari lokasi…");
-            Kick();
-            System.Threading.ThreadPool.QueueUserWorkItem(delegate
-            {
-                string error;
-                var found = Cities.Search(typed, out error);
-                Post(delegate
-                {
-                    cityBusy = false;
-                    if (found.Count == 0)
-                    {
-                        cityStatus = error != null ? Lang.T("Pencarian gagal, coba lagi") : Lang.T("Lokasi tidak ditemukan");
-                        Kick();
-                        return;
-                    }
-                    var hit = found[0];
-                    string packed = Cities.Pack((string)hit[0], Convert.ToDouble(hit[1]), Convert.ToDouble(hit[2]), Convert.ToDouble(hit[3]));
-                    settings.Set("pray.city", packed);
-                    settings.Set("pray", true);
-                    settings.Save();
-                    prayToday = null;
-                    cityTyping = false;
-                    cityText = "";
-                    cityStatus = "";
-                    weatherAskedUtc = DateTime.MinValue;
-                    TickWeather();
-                    Kick();
-                });
-            });
-        }
 
         void UseCity(string packed)
         {

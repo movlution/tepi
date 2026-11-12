@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -328,13 +328,6 @@ namespace Tepi
                     else if (m.WParam.ToInt32() == FixHotkey) BeginInvoke(new Action(delegate { RewriteSelection(false); }));
                     else if (m.WParam.ToInt32() == TranslateHotkey) BeginInvoke(new Action(delegate { RewriteSelection(true); }));
                     return;
-                case 0x0102: // WM_CHAR: typing into the island's own field
-                    if (cityTyping && CityTyped((char)m.WParam.ToInt32()))
-                    {
-                        m.Result = IntPtr.Zero;
-                        return;
-                    }
-                    break;
                 case 0x020E: // WM_MOUSEHWHEEL: sideways swipe changes tab
                     if (expanded) WheelTab((short)((m.WParam.ToInt64() >> 16) & 0xFFFF));
                     m.Result = IntPtr.Zero;
@@ -1256,18 +1249,6 @@ namespace Tepi
             float inA = Ease.OutCubic((t - 0.05f) / 0.22f);
             float grow = Anim.Reduced || Kin(previous, current) ? 0 : 1 - Springs.Progress(t - 0.05f, 0.34f, 0.86f);
             DrawViewAt(current, inA, 1 + 0.04f * grow, registerHits && inA > 0.8f && grow < 0.15f, now);
-            // On top of the view: the city field takes over the notch while typing
-            if (cityTyping && shell.Height > 40)
-            {
-                var st = g.Save();
-                g.TranslateTransform(shell.X, shell.Y);
-                originX = shell.X;
-                originY = shell.Y;
-                p.Alpha = 1f;
-                hitsOn = registerHits;
-                try { DrawCityField(shell.Width, shell.Height); }
-                finally { g.Restore(st); hitsOn = false; }
-            }
             if (registerHits) DrawFocusRing();
         }
 

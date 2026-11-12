@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
@@ -48,8 +48,6 @@ namespace Tepi
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
-            // The city field owns the keys while it is open
-            if (cityTyping && CityCommand(keyData)) return true;
             if (!keyboardMode) return base.ProcessCmdKey(ref msg, keyData);
             Keys key = keyData & Keys.KeyCode;
             bool shift = (keyData & Keys.Shift) != 0;

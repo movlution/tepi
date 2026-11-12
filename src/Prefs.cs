@@ -751,16 +751,28 @@ namespace Tepi
                 f.Box.AutoCompleteMode = AutoCompleteMode.None;
                 f.Box.AutoCompleteSource = AutoCompleteSource.None;
 
-                // Live suggestion in the row's own detail line, not a popup
-                string resting = Lang.T("Ketik nama kota atau kabupaten, lalu Enter");
+                // Typing opens a pickable list right under the box
+                Action save = null;
+                CitySuggest suggest = null;
                 f.Box.TextChanged += delegate
                 {
-                    string hint = Cities.Hint(f.Box.Text);
-                    row.Detail = hint.Length > 0 ? hint : resting;
-                    row.Invalidate();
+                    if (building) return;
+                    var hits = Cities.Suggest(f.Box.Text, 8);
+                    if (hits.Count == 0) { if (suggest != null) { suggest.Hide(); suggest = null; } return; }
+                    if (suggest == null || suggest.IsDisposed) suggest = new CitySuggest(Ui);
+                    suggest.Bind(hits.ToArray());
+                    var at = f.Box.PointToScreen(new Point(0, f.Box.Height + 4));
+                    suggest.ShowAt(at, f.Box.Width, delegate(string picked)
+                    {
+                        // Picking fills the box and commits straight away
+                        f.Box.Text = picked;
+                        f.Box.SelectionStart = f.Box.Text.Length;
+                        save();
+                        if (suggest != null) { suggest.Hide(); suggest = null; }
+                    });
                 };
 
-                Action save = delegate
+                save = delegate
                 {
                     string typed = (f.Box.Text ?? "").Trim();
                     if (typed.Length == 0) return;
@@ -1905,6 +1917,116 @@ namespace Tepi
                 public override Rectangle Bounds { get { return owner.RectangleToScreen(Rectangle.Round(owner.Cell(index))); } }
                 public override void DoDefaultAction() { owner.Pick(index); }
             }
+        }
+    }
+
+    // Small pickable list under a text box: a dropdown you choose from, not a hint line
+    class CitySuggest : Form
+    {
+        readonly float ui;
+        string[] items = new string[0];
+        int hot = -1;
+        Action<string> picked;
+
+        public CitySuggest(float ui)
+        {
+            this.ui = ui;
+            FormBorderStyle = FormBorderStyle.None;
+            ShowInTaskbar = false;
+            TopMost = true;
+            StartPosition = FormStartPosition.Manual;
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+        }
+
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                var cp = base.CreateParams;
+                // Shadowed, and never a taskbar button
+                cp.ClassStyle |= 0x20000;
+                cp.ExStyle |= 0x00000080; // WS_EX_TOOLWINDOW
+                return cp;
+            }
+        }
+
+        public bool Showing { get { return Visible; } }
+
+        public void Bind(string[] names)
+        {
+            items = names ?? new string[0];
+            hot = -1;
+            Height = (int)((Math.Min(items.Length, 8) * 30 + 10) * ui);
+            Invalidate();
+        }
+
+        public void ShowAt(Point screen, int width, Action<string> onPick)
+        {
+            picked = onPick;
+            Width = Math.Max(width, (int)(240 * ui));
+            if (!Visible) Show();
+            Location = screen;
+            Invalidate();
+        }
+
+        protected override void OnDeactivate(EventArgs e)
+        {
+            base.OnDeactivate(e);
+            Hide();
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            KitInk.Smooth(g);
+            g.Clear(KitInk.Window);
+            using (var pen = new Pen(KitInk.Line, 1f))
+                g.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
+            var text = new SolidBrush(KitInk.Text);
+            var hover = new SolidBrush(KitInk.Hover);
+            try
+            {
+                using (var f = new Font(Ink.MenuFamily, 12.5f * ui, GraphicsUnit.Pixel))
+                {
+                    for (int i = 0; i < items.Length; i++)
+                    {
+                        int y = (int)((i * 30 + 5) * ui);
+                        var r = new Rectangle((int)(4 * ui), y, Width - (int)(8 * ui), (int)(30 * ui));
+                        if (i == hot) g.FillRectangle(hover, r);
+                        g.DrawString(items[i], f, text, r.X + (int)(10 * ui), r.Y + r.Height / 2 - f.Height / 2);
+                    }
+                }
+            }
+            finally { text.Dispose(); hover.Dispose(); }
+        }
+
+        int RowAt(Point p)
+        {
+            int i = (int)((p.Y / ui - 5) / 30);
+            return i >= 0 && i < items.Length ? i : -1;
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            int at = RowAt(e.Location);
+            if (at != hot) { hot = at; Invalidate(); }
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            if (hot != -1) { hot = -1; Invalidate(); }
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            int at = RowAt(e.Location);
+            if (at < 0 || picked == null) return;
+            string pick = items[at];
+            Hide();
+            picked(pick);
         }
     }
 }
