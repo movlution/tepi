@@ -759,12 +759,13 @@ namespace Tepi
                     if (building) return;
                     var hits = Cities.Suggest(f.Box.Text, 8);
                     if (hits.Count == 0) { if (suggest != null) suggest.Hide2(); return; }
-                    // Child of this window, so showing it cannot take the caret
+                    // Host it in the scrolling page so it moves with the box, not on the window
                     if (suggest == null || suggest.IsDisposed)
                     {
                         suggest = new CitySuggest(Ui);
-                        var host = f.Box.Parent;
-                        while (host != null && host.Parent != null) host = host.Parent;
+                        Control host = f.Box.Parent;
+                        while (host != null && !(host is Panel && ((Panel)host).AutoScroll)) host = host.Parent;
+                        if (host == null) host = TopLevelControl;
                         if (host == null) return;
                         host.Controls.Add(suggest);
                         suggest.BringToFront();
@@ -1977,19 +1978,20 @@ namespace Tepi
             Invalidate();
         }
 
-        // Placement is in the parent's own coordinates, so no screen maths
+        // The anchor sits several panels deep, so convert through screen space
         public void ShowUnder(Control anchor, Action<string> onPick)
         {
             picked = onPick;
             var host = Parent;
             if (host == null) return;
-            int x = anchor.Left;
-            int y = anchor.Bottom + (int)(4 * ui);
-            Width = Math.Max(anchor.Width, (int)(240 * ui));
+            var at = host.PointToClient(anchor.PointToScreen(Point.Empty));
+            int x = at.X;
+            int y = at.Y + anchor.Height + (int)(4 * ui);
+            Width = Math.Max(anchor.Width + 24, (int)(240 * ui));
             // Keep it inside the window it belongs to
             if (x + Width > host.ClientSize.Width - 8) x = Math.Max(8, host.ClientSize.Width - Width - 8);
-            if (y + Height > host.ClientSize.Height - 8) y = anchor.Top - Height - (int)(4 * ui);
-            Location = new Point(x, Math.Max(4, y));
+            if (y + Height > host.ClientSize.Height - 8) y = Math.Max(4, at.Y - Height - (int)(4 * ui));
+            Location = new Point(x, y);
             Visible = true;
             BringToFront();
             Invalidate();
