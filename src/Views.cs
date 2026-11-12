@@ -14,6 +14,8 @@ namespace Tepi
 
         SizeF ViewSize(View v)
         {
+            // The city field needs a real notch to live in, not a 34 px sliver
+            if (cityTyping) return new SizeF(Math.Max(420, BaseHalf * 2), 56);
             if (UprightNow(v)) return SideSize(v);
             switch (v)
             {
@@ -121,6 +123,44 @@ namespace Tepi
                 case View.Mini: DrawMini(w, h, now); break;
                 case View.Panel: DrawPanel(w, h, now); break;
             }
+        }
+
+        // Drawn last: the city field sits on top of whatever view was showing
+        void DrawCityField(float w, float h)
+        {
+            if (!cityTyping) return;
+            // Inside the shell's own coordinates: no shell.Y offset here
+            float fh = Math.Min(h - 16, 34);
+            var field = new RectangleF(14, (h - fh) / 2, w - 28, fh);
+            p.FillRound(field, field.Height / 2, p.T.Fill);
+            float cy = field.Y + field.Height / 2;
+            // Label on the left so the box does not look like a mystery row
+            float cap = field.X + 16;
+            p.Icon(IcoPray, 13f, p.T.Sub, cap, cy);
+            cap += 20;
+            string typed = cityText.Length > 0 ? cityText : "";
+            string line = cityStatus.Length > 0 ? cityStatus : cityTypedHint();
+            if (typed.Length > 0)
+                p.Text(typed, Ink.Semi(13f), p.T.Text, cap, cy);
+            else
+                p.Text(Lang.T("Ketik kota, Enter untuk pakai"), Ink.Text(12.5f), p.T.Sub, cap, cy);
+            // Suggestion trail and a blinking caret, both clear of the text
+            float caretAt = cap + (typed.Length > 0 ? p.Measure(typed, Ink.Semi(13f)) + 2 : 0);
+            if (line.Length > 0 && typed.Length > 0)
+                p.TextRight(line, Ink.Small(11.5f), p.T.Sub, field.Right - 14, cy);
+            if (!cityBusy && ((Environment.TickCount / 500) & 1) == 0)
+                p.FillRound(new RectangleF(caretAt, field.Y + 9, 1.5f, field.Height - 18), 0.75f, p.T.Accent);
+            AddHit(field, "cityField", delegate { }, null, null);
+        }
+
+        // What Tab would insert, or what Enter will do
+        string cityTypedHint()
+        {
+            var pick = Cities.Suggest(cityText, 1);
+            if (pick.Count > 0 && !string.Equals(pick[0], cityText, StringComparison.OrdinalIgnoreCase))
+                return "Tab · " + pick[0];
+            if (Cities.Find(cityText) != null) return "Enter";
+            return cityText.Length >= 2 ? Lang.T("Enter mencari") : "";
         }
 
         // Per-frame state besides springs

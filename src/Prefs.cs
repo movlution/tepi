@@ -751,6 +751,15 @@ namespace Tepi
                 f.Box.AutoCompleteMode = AutoCompleteMode.None;
                 f.Box.AutoCompleteSource = AutoCompleteSource.None;
 
+                // Live suggestion in the row's own detail line, not a popup
+                string resting = Lang.T("Ketik nama kota atau kabupaten, lalu Enter");
+                f.Box.TextChanged += delegate
+                {
+                    string hint = Cities.Hint(f.Box.Text);
+                    row.Detail = hint.Length > 0 ? hint : resting;
+                    row.Invalidate();
+                };
+
                 Action save = delegate
                 {
                     string typed = (f.Box.Text ?? "").Trim();

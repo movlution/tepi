@@ -691,6 +691,7 @@ namespace Tepi
             { "Pencarian gagal, coba lagi", "Search failed, try again" },
             { "Cari kota lain…", "Find another city…" },
             { "Kota jadwal sholat", "Prayer time city" },
+            { "Ketik kota, Enter untuk pakai", "Type a city, Enter to use" },
             { "Ketik nama kota, lalu Enter", "Type a city name, then Enter" },
             { "Tab memakai ", "Tab uses " },
             { "Ketik nama kota atau kabupaten, lalu Enter", "Type a city or regency, then Enter" },
