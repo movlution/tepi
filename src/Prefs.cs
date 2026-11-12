@@ -112,6 +112,9 @@ namespace Tepi
             Kick();
         }
 
+        // A theme pack can switch the eyes off entirely
+        internal bool EyesAllowed { get { return packEyes; } }
+
         void SetLanguage(bool english)
         {
             settings.Set("lang", english ? "en" : "id");
@@ -1101,9 +1104,10 @@ namespace Tepi
                         var follow = Switch("island.follow", true, null);
                         follow.Enabled = settings.GetBool("island.eyes", true);
                         add(Row(Lang.T("Ikuti kursor"), follow.Enabled ? Lang.T("Mata melirik ke arah kursor") : Lang.T("Nyalakan Mata dulu"), follow));
-                        var face = Seg(new[] { Lang.T("Mata"), Lang.T("Jam") }, settings.Get("idle.face", "eyes") == "clock" ? 1 : 0, i => island.SetChoice("idle.face", i == 1 ? "clock" : "eyes"));
-                        face.Enabled = follow.Enabled;
-                        add(Row(Lang.T("Saat diam"), face.Enabled ? Lang.T("Isi island ketika tidak ada aktivitas") : Lang.T("Nyalakan Mata dulu"), face));
+                        // The face also decides what the mini notch shows, so it stays usable
+                        var face = Seg(new[] { Lang.T("Mata"), Lang.T("Jam") }, settings.Get("idle.face", "eyes") == "clock" ? 1 : 0, i => { island.SetChoice("idle.face", i == 1 ? "clock" : "eyes"); BeginInvoke(new Action(Relayout)); });
+                        face.Enabled = island.EyesAllowed;
+                        add(Row(Lang.T("Saat diam"), face.Enabled ? Lang.T("Isi island saat tidak ada aktivitas, juga di mini") : Lang.T("Tema ini tidak memakai mata"), face));
                         cap(Lang.T("Isi samping"));
                         var slotNames = Array.ConvertAll(SlotNames, n => Lang.T(n));
                         foreach (var side in new[] { new[] { "idle.left", "Isi kiri" }, new[] { "idle.right", "Isi kanan" } })

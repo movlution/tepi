@@ -682,6 +682,8 @@ namespace Tepi
             { "Teks disalin", "Text copied" },
             { "Gagal menyalin, coba lagi", "Copy failed, try again" },
             { "Langsung", "Instant" },
+            { "Isi island saat tidak ada aktivitas, juga di mini", "What the island shows when idle, in mini too" },
+            { "Tema ini tidak memakai mata", "This theme does not use eyes" },
             { "Jeda sebelum muncul", "Delay before it appears" },
             { "Berapa lama kursor harus berhenti di tepi bawah; klik tepi tetap langsung membuka", "How long the pointer must rest on the bottom edge; clicking the edge still opens it at once" },
             { "{0} baris", "{0} lines" },

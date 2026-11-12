@@ -15,6 +15,8 @@ namespace Tepi
         const float MiniW = 56, MiniH = 6, MiniBusyW = 64, MiniBusyH = 8;
         // Eyes sliver: height, widths, eye scale, x
         const float MiniEyesH = 14, MiniEyesW = 40, MiniEyesDotW = 52, MiniEyesBusyW = 76, MiniEyeK = 0.6f, MiniEyeX = 18;
+        // Clock sliver: height, width, text size
+        const float MiniClockH = 14, MiniClockW = 44, MiniClockText = 11f;
         // Dwell, away and poll timings
         const int MiniEdgeMs = 150, MiniDwellMs = 350, MiniAwayMs = 600, MiniPollMs = 100, MiniFastMs = 30;
         // Reach beside, band below, still radius
@@ -81,10 +83,18 @@ namespace Tepi
 
         bool MiniBusy() { return ActivityView() != View.Idle || PrivacyOn || LockShown; }
 
+        // Mini shows the idle face too: eyes, or the clock
+        bool MiniClockOn { get { return EyesOn && settings.Get("idle.face", "eyes") == "clock"; } }
+
         SizeF MiniSize()
         {
-            // Side edge: the sliver stands upright; eyes peek out
-            if (OnSide) return EyesOn ? new SizeF(22, 30) : MiniBusy() ? new SizeF(MiniBusyH, MiniBusyW) : new SizeF(MiniH, MiniW);
+            // Side edge: a clock does not fit the upright sliver, so it keeps the plain bar
+            if (OnSide)
+            {
+                bool face = EyesOn && !MiniClockOn;
+                return face ? new SizeF(22, 30) : MiniBusy() ? new SizeF(MiniBusyH, MiniBusyW) : new SizeF(MiniH, MiniW);
+            }
+            if (MiniClockOn) return MiniBusy() ? new SizeF(MiniClockW + 24, MiniClockH) : new SizeF(MiniClockW, MiniClockH);
             if (!EyesOn) return MiniBusy() ? new SizeF(MiniBusyW, MiniBusyH) : new SizeF(MiniW, MiniH);
             // Eyes only, whatever is running
             return new SizeF(MiniEyesW, MiniEyesH);
@@ -372,6 +382,15 @@ namespace Tepi
         {
             View v = ActivityView();
             bool dot = PrivacyOn || RapatOn;
+            // Idle face set to the clock: the time replaces the eyes, same marks as MiniFace
+            if (MiniClockOn)
+            {
+                float cx = v != View.Idle ? w / 2 - 12 : w / 2;
+                clockRoller.Draw(p, Ink.Semi(MiniClockText), p.T.Text, cx, h / 2, StringAlignment.Center, now);
+                if (dot) p.Circle(w - 9, h / 2, 1.7f, MicSilenced || RapatOn ? p.T.Negative : p.T.Accent);
+                if (LockShown) p.Symbol(Sym.ChevronUp, 10, h / 2, 6.5f, p.T.Text);
+                return;
+            }
             if (EyesOn) { MiniFace(w, h, now, v, dot); return; }
             bool caps = LockShown;
             if (v == View.Idle && !dot && !caps) return;
