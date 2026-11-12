@@ -869,7 +869,7 @@ namespace Tepi
                 if (tasksLoading && classSeg == 0) p.Orbit(r.X + 17, r.Y + TabH / 2, 6.5f, orbitPhase, p.T.Sub);
                 else TabButton("refresh", Ink.IcoRefresh, delegate { if (!tasksLoading) RefreshAll(what); }, false);
             }
-            else if (page == PageMessages && notifs.Count > 0)
+            else if (page == PageMessages && notifs.Count > 0 && NotifSource.CanRemove)
                 TabButton("clearAll", '', delegate { Vanish(RowRects("notif", "notifDel"), true); notifScroll.Snap(0); RemoveNotifs(new List<NotifItem>(notifs)); }, true);
             else if (page == PageShelf && shelfSeg == 1 && clips.Count > 0)
                 TabButton("clearClips", '', delegate { Vanish(RowRects("clip", null), true); clipScroll.Snap(0); clips.Clear(); Kick(); }, true);

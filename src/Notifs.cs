@@ -5,6 +5,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
+using System.Xml;
 using Windows.ApplicationModel;
 using Windows.Storage.Streams;
 using Windows.UI.Notifications;
@@ -31,15 +32,40 @@ namespace Tepi
         static readonly Dictionary<string, Bitmap> logos = new Dictionary<string, Bitmap>();
         public static readonly string Dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Microsoft\Windows\Notifications");
 
-        public static UserNotificationListenerAccessStatus Access() { return UserNotificationListener.Current.GetAccessStatus(); }
+        // WinRT only serves a process with package identity; Tepi ships as a loose exe
+        static bool? packaged;
+        public static bool Packaged
+        {
+            get
+            {
+                if (packaged == null)
+                {
+                    try { var _ = Package.Current.Id.FamilyName; packaged = true; }
+                    catch (Exception) { packaged = false; }
+                }
+                return packaged.Value;
+            }
+        }
+
+        public static UserNotificationListenerAccessStatus Access()
+        {
+            // Unpackaged: the listener cannot be consulted at all, and the database
+            // needs no permission, so there is nothing for the panel to report
+            if (!Packaged) return UserNotificationListenerAccessStatus.Allowed;
+            return UserNotificationListener.Current.GetAccessStatus();
+        }
 
         public static void RequestAccess(Action done)
         {
+            if (!Packaged) { if (done != null) done(); return; }
             var op = UserNotificationListener.Current.RequestAccessAsync();
             op.Completed = delegate { done(); };
         }
 
-        public static List<NotifItem> Read()
+        // Packaged builds talk to the listener; loose builds read the database
+        public static List<NotifItem> Read() { return Packaged ? ReadWinRt() : ReadDb(); }
+
+        public static List<NotifItem> ReadWinRt()
         {
             var list = new List<NotifItem>();
             foreach (var n in MediaService.Await(UserNotificationListener.Current.GetNotificationsAsync(NotificationKinds.Toast)))
@@ -74,7 +100,103 @@ namespace Tepi
             return list;
         }
 
-        public static void Remove(uint id) { UserNotificationListener.Current.RemoveNotification(id); }
+        // Without a package the listener cannot drop a toast; Windows expires it instead
+        public static bool CanRemove { get { return Packaged; } }
+
+        public static void Remove(uint id)
+        {
+            if (!CanRemove) return;
+            UserNotificationListener.Current.RemoveNotification(id);
+        }
+
+        // Direct read of wpndatabase.db: no permission, no WinRT, no hang
+        public static List<NotifItem> ReadDb()
+        {
+            var list = new List<NotifItem>();
+            IntPtr h;
+            if (sqlite3_open_v2(Encoding.UTF8.GetBytes(Path.Combine(Dir, "wpndatabase.db") + "\0"), out h, 2, IntPtr.Zero) != 0)
+            {
+                if (h != IntPtr.Zero) sqlite3_close(h);
+                return list;
+            }
+            sqlite3_busy_timeout(h, 300);
+            try
+            {
+                IntPtr stmt;
+                // Handler row turns the toast's HandlerId into an app id
+                const string sql = "select n.Id, n.Payload, n.ArrivalTime, coalesce(hh.PrimaryId, '') from Notification n " +
+                                   "left join NotificationHandler hh on hh.RecordId = n.HandlerId " +
+                                   "where n.Type = 'toast' order by n.Id desc limit 60";
+                if (sqlite3_prepare16_v2(h, sql, -1, out stmt, IntPtr.Zero) != 0) return list;
+                try
+                {
+                    while (sqlite3_step(stmt) == 100)
+                    {
+                        var item = new NotifItem { Id = (uint)sqlite3_column_int64(stmt, 0) };
+                        string payload = Column16(stmt, 1);
+                        long arrival = sqlite3_column_int64(stmt, 2);
+                        item.AppId = Column16(stmt, 3) ?? "";
+                        // ArrivalTime is a FILETIME, so it is already UTC like the rest of Tepi
+                        try { item.Time = DateTime.FromFileTimeUtc(arrival); }
+                        catch (Exception) { item.Time = DateTime.UtcNow; }
+                        ParseToast(payload, item);
+                        if (item.Title.Length == 0 && item.Body.Length == 0) continue;
+                        if (item.AppName.Length == 0) item.AppName = NiceAppId(item.AppId);
+                        item.Chat = IsChat(item.AppId + " " + item.AppName, item.Title + " " + item.Body);
+                        list.Add(item);
+                    }
+                }
+                finally { sqlite3_finalize(stmt); }
+            }
+            finally { sqlite3_close(h); }
+            list.Sort((a, b) => b.Time.CompareTo(a.Time));
+            return list;
+        }
+
+        // Text straight from the toast XML; first line is the title
+        static void ParseToast(string xml, NotifItem item)
+        {
+            if (string.IsNullOrEmpty(xml)) return;
+            try
+            {
+                var doc = new XmlDocument { XmlResolver = null };
+                doc.LoadXml(xml);
+                var nodes = doc.GetElementsByTagName("text");
+                var texts = new List<string>();
+                for (int i = 0; i < nodes.Count && texts.Count < 6; i++)
+                {
+                    var n = nodes[i];
+                    if (n == null) continue;
+                    string s = Fmt.OneLine(n.InnerText, 300);
+                    if (s.Length > 0) texts.Add(s);
+                }
+                if (texts.Count > 0) item.Title = texts[0];
+                if (texts.Count > 1) item.Body = string.Join(" · ", texts.GetRange(1, texts.Count - 1));
+            }
+            catch (Exception ex) { Log.Write("notif payload: " + ex.Message); }
+        }
+
+        // com.squirrel.Discord.Discord -> Discord, Microsoft.ScreenSketch_x!App -> ScreenSketch
+        static string NiceAppId(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return "";
+            int bang = id.IndexOf('!');
+            string s = bang > 0 ? id.Substring(0, bang) : id;
+            int us = s.IndexOf('_');
+            if (us > 0) s = s.Substring(0, us);
+            int dot = s.LastIndexOf('.');
+            if (dot >= 0 && dot + 1 < s.Length) s = s.Substring(dot + 1);
+            if (s.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) s = s.Substring(0, s.Length - 4);
+            return s;
+        }
+
+        static string Column16(IntPtr stmt, int col)
+        {
+            IntPtr p = sqlite3_column_text16(stmt, col);
+            int bytes = sqlite3_column_bytes16(stmt, col);
+            if (p == IntPtr.Zero || bytes <= 0) return "";
+            return Marshal.PtrToStringUni(p, bytes / 2) ?? "";
+        }
 
         // Off: Windows drops it after ~6 s
         public static bool Kept(string appId)
@@ -151,6 +273,8 @@ namespace Tepi
         [DllImport("winsqlite3.dll", CharSet = CharSet.Unicode)] static extern int sqlite3_prepare16_v2(IntPtr db, string sql, int bytes, out IntPtr stmt, IntPtr tail);
         [DllImport("winsqlite3.dll")] static extern int sqlite3_step(IntPtr stmt);
         [DllImport("winsqlite3.dll")] static extern long sqlite3_column_int64(IntPtr stmt, int col);
+        [DllImport("winsqlite3.dll")] static extern IntPtr sqlite3_column_text16(IntPtr stmt, int col);
+        [DllImport("winsqlite3.dll")] static extern int sqlite3_column_bytes16(IntPtr stmt, int col);
         [DllImport("winsqlite3.dll")] static extern int sqlite3_finalize(IntPtr stmt);
         static IntPtr db;
 

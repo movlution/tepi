@@ -453,8 +453,9 @@ namespace Tepi
                 float tx = row.X + 50;
                 p.Text(NotifTitle(item), Ink.Semi(12.5f), p.T.Text, tx, cy - 9, row.Right - tx - 80, StringAlignment.Near);
                 p.Text(NotifBody(item), Ink.Text(11.5f), p.T.Sub, tx, cy + 9, row.Right - tx - 44, StringAlignment.Near);
+                // Without package identity the listener cannot drop a toast, so no false button
                 var x = new RectangleF(row.Right - 36, cy - 14, 28, 28);
-                if (hover)
+                if (hover && NotifSource.CanRemove)
                 {
                     p.Circle(x.X + 14, x.Y + 14, 12, Hover(del) ? p.T.FillHover : p.T.Fill);
                     p.Cross(x.X + 14, x.Y + 14, 10, p.T.Sub);
@@ -463,6 +464,7 @@ namespace Tepi
                 var open = item;
                 AddHit(row, id, delegate { OpenNotifApp(open); });
                 // Added last: wins over the row
+                if (!NotifSource.CanRemove) continue;
                 var victim = item;
                 AddHit(x, del, delegate { RemoveNotifs(new List<NotifItem> { victim }); });
             }
