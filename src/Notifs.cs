@@ -143,6 +143,7 @@ namespace Tepi
                         if (item.Title.Length == 0 && item.Body.Length == 0) continue;
                         if (item.AppName.Length == 0) item.AppName = NiceAppId(item.AppId);
                         item.Chat = IsChat(item.AppId + " " + item.AppName, item.Title + " " + item.Body);
+                        item.Logo = LogoForId(item.AppId);
                         list.Add(item);
                     }
                 }
@@ -234,6 +235,29 @@ namespace Tepi
             text = text.ToLowerInvariant();
             foreach (var s in ChatSites) if (text.Contains(s)) return true;
             return false;
+        }
+
+        // App icon by app id alone: the shell knows both packaged and packed-in apps
+        static Bitmap LogoForId(string appId)
+        {
+            if (string.IsNullOrEmpty(appId)) return null;
+            lock (logos)
+            {
+                Bitmap cached;
+                if (logos.TryGetValue(appId, out cached)) return cached;
+            }
+            Bitmap logo = null;
+            try
+            {
+                // shell:AppsFolder resolves an AUMID; a plain path resolves a file
+                string item = appId.IndexOf(':') >= 0 ? appId : ShellApp.AppsFolderOf(appId);
+                logo = ShellApp.Icon(item, 48);
+                if (logo == null) logo = ShellApp.Icon(appId, 48);
+                if (logo != null) logo = Ink.Grayscale(logo, 48);
+            }
+            catch (Exception ex) { Log.Write("notif logo: " + ex.Message); logo = null; }
+            lock (logos) logos[appId] = logo;
+            return logo;
         }
 
         static Bitmap LogoFor(string appId, AppInfo info)
@@ -367,7 +391,9 @@ namespace Tepi
             DateTime nextFull = DateTime.MinValue;
             while (true)
             {
-                int wait = watcher != null ? 10000 : 1000;
+                // The watcher is a hint, not a guarantee: rollups and settings writes
+                // touch other files, so poll the database too. A read costs ~20 ms.
+                int wait = enabled ? 1000 : 10000;
                 DateTime retry;
                 lock (state) retry = retryUtc;
                 if (enabled && retry != DateTime.MinValue)
