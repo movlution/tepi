@@ -870,7 +870,15 @@ namespace Tepi
                 else TabButton("refresh", Ink.IcoRefresh, delegate { if (!tasksLoading) RefreshAll(what); }, false);
             }
             else if (page == PageMessages && notifs.Count > 0)
-                TabButton("clearAll", '', delegate { Vanish(RowRects("notif", "notifDel"), true); notifScroll.Snap(0); RemoveNotifs(new List<NotifItem>(notifs)); }, true);
+                TabButton("clearAll", '', delegate
+                {
+                    Vanish(RowRects("notif", "notifDel"), true);
+                    notifScroll.Snap(0);
+                    var shown = new List<NotifItem>(notifs);
+                    RemoveNotifs(shown);
+                    // The page only holds the newest rows; clear everything else too
+                    NotifSource.ClearAll();
+                }, true);
             else if (page == PageShelf && shelfSeg == 1 && clips.Count > 0)
                 TabButton("clearClips", '', delegate { Vanish(RowRects("clip", null), true); clipScroll.Snap(0); clips.Clear(); Kick(); }, true);
             else if (page == PageShelf && shelfSeg == 0 && shelf.Count > 0)

@@ -68,6 +68,7 @@ namespace Tepi
         public static List<NotifItem> Read()
         {
             var list = Packaged ? ReadWinRt() : ReadDb();
+            SkipClearing(list);
             // A cleared toast stays cleared even while the database still holds it
             return list.FindAll(n => !IsDismissed(n.Id, n.AppId, n.Tag));
         }
@@ -154,10 +155,10 @@ namespace Tepi
                 if (!changed) return;
                 try
                 {
-                    // Bounded: only the newest ids ever reappear
-                    var lines = new List<string>(set);
-                    if (lines.Count > 400) lines.RemoveRange(0, lines.Count - 400);
+                    // Ids are cheap and every one of them can come back, so keep them all
                     Directory.CreateDirectory(Settings.Dir);
+                    var lines = new List<string>(set);
+                    lines.Sort(StringComparer.Ordinal);
                     File.WriteAllLines(DismissFile, lines.ToArray());
                 }
                 catch (Exception ex) { Log.Write("notif dismissed write: " + ex.Message); }
@@ -167,6 +168,42 @@ namespace Tepi
             {
                 foreach (var n in items) DropFromHistory(n);
             });
+        }
+
+        // Everything the database holds, not just what a page happens to show
+        static readonly List<NotifItem> clearing = new List<NotifItem>();
+        static bool clearingAll;
+
+        public static void ClearAll()
+        {
+            if (clearingAll) return;
+            clearingAll = true;
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                var all = new List<NotifItem>();
+                try
+                {
+                    // Unfiltered: this must reach past the page limit and the chat filter
+                    all = ReadDb();
+                    lock (clearing) { clearing.Clear(); clearing.AddRange(all); }
+                    Dismiss(all);
+                }
+                catch (Exception ex) { Log.Write("notif clear all: " + ex.Message); }
+                finally { clearingAll = false; }
+            });
+        }
+
+        // Read() runs on the notif thread and drops what ClearAll just covered
+        static void SkipClearing(List<NotifItem> list)
+        {
+            if (!clearingAll) return;
+            lock (clearing)
+            {
+                if (clearing.Count == 0) return;
+                var done = new HashSet<uint>();
+                foreach (var n in clearing) done.Add(n.Id);
+                list.RemoveAll(n => done.Contains(n.Id));
+            }
         }
 
         // Packaged only: the listener refuses to touch toasts without package identity
