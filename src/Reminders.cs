@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
@@ -469,6 +469,7 @@ namespace Tepi
         const char IcoPray = '';
         static readonly string[] Secs = MakeSecs();
         readonly Roller prayRoller = new Roller(), eyesRoller = new Roller();
+        CityBox cityBox;
         Action actCity, actPraySwitch, actDrinkPlus, actLater, actRemindOk, actRemindDone;
         readonly Action[] wellActs = new Action[3];
         Func<DateTime, double> prayLeftPaint, eyesLeftPaint;
@@ -784,31 +785,31 @@ namespace Tepi
             return left.TotalSeconds - Math.Floor(left.TotalMinutes) * 60 + 0.02;
         }
 
-        void CityMenu()
+        // Typed, not a dropdown: the list has hundreds of names and still misses places
+        void CityMenu() { OpenCitySearch(); }
+
+        void OpenCitySearch()
         {
-            var m = new ContextMenuStrip();
-            string cur = Cities.NameOf(settings.Get("pray.city", ""));
-            // The menu carries the nearest few; anything else is typed in settings
-            foreach (var c in Cities.List)
-            {
-                string name = (string)c[0];
-                m.Items.Add(new ToolStripMenuItem(name, null, delegate
-                {
-                    settings.Set("pray.city", name);
-                    settings.Set("pray", true);
-                    settings.Save();
-                    prayToday = null;
-                    Kick();
-                }) { Checked = string.Equals(name, cur, StringComparison.OrdinalIgnoreCase) });
-            }
-            m.Items.Add(new ToolStripSeparator());
-            m.Items.Add(new ToolStripMenuItem(Lang.T("Cari kota lain…"), null, delegate
-            {
-                OpenPrefs("remind");
-            }));
-            StyleMenu(m);
-            m.Closed += delegate { BeginInvoke(new Action(m.Dispose)); };
-            m.Show(MenuAt("prayCity"));
+            if (cityBox != null && !cityBox.IsDisposed) { cityBox.Activate(); return; }
+            cityBox = new CityBox(Cities.NameOf(settings.Get("pray.city", "")), UseCity);
+            var area = Screen.FromHandle(Handle).WorkingArea;
+            cityBox.StartPosition = FormStartPosition.Manual;
+            cityBox.Show();
+            cityBox.Location = new Point(area.X + (area.Width - cityBox.Width) / 2, area.Y + (int)(70 * scale));
+            Native.SetForegroundWindow(cityBox.Handle);
+        }
+
+        void UseCity(string packed)
+        {
+            if (string.IsNullOrEmpty(packed)) return;
+            settings.Set("pray.city", packed);
+            settings.Set("pray", true);
+            settings.Save();
+            prayToday = null;
+            Kick();
+            // New coordinates: refresh within the minute instead of waiting 30
+            weatherAskedUtc = DateTime.MinValue;
+            TickWeather();
         }
 
 
@@ -862,4 +863,154 @@ namespace Tepi
             return 96;
         }
     }
+
+    // One typed line: suggestions from the built-in list, anything else looked up
+    class CityBox : KitWindow
+    {
+        readonly KitText box = new KitText();
+        readonly List<string> names = new List<string>();
+        readonly Action<string> done;
+        readonly string[] list;
+        int at;
+        string status = "";
+        bool busy;
+
+        public CityBox(string current, Action<string> done)
+        {
+            this.done = done;
+            foreach (var c in Cities.List) names.Add((string)c[0]);
+            list = names.ToArray();
+            FormBorderStyle = FormBorderStyle.None;
+            ShowInTaskbar = false;
+            TopMost = true;
+            Text = Lang.T("Kota jadwal sholat");
+            box.BorderStyle = BorderStyle.None;
+            box.Text = current ?? "";
+            box.KeyDown += TypeKeys;
+            Controls.Add(box);
+            Deactivate += delegate { if (!IsDisposed) Close(); };
+        }
+
+        protected override CreateParams CreateParams
+        {
+            get { var cp = base.CreateParams; cp.ClassStyle |= 0x20000; return cp; }
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            Relayout();
+        }
+
+        public override void Relayout()
+        {
+            float s = Ui;
+            BackColor = KitInk.Window;
+            ClientSize = new Size((int)(460 * s), (int)(106 * s));
+            box.Font = UiFont(15f);
+            box.BackColor = KitInk.Group;
+            box.ForeColor = KitInk.Text;
+            box.SetBounds((int)(30 * s), (int)(22 * s), ClientSize.Width - (int)(60 * s), (int)(24 * s));
+            Native.SetCue(box.Handle, Lang.T("Ketik kota atau kabupaten"));
+            Invalidate();
+        }
+
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            box.Focus();
+            box.SelectAll();
+        }
+
+        // Up and down walk the matching names, Enter takes the box, Esc leaves
+        void TypeKeys(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Escape) { e.SuppressKeyPress = true; Close(); return; }
+            if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; Commit(); return; }
+            if (e.KeyCode != Keys.Down && e.KeyCode != Keys.Up) return;
+            e.SuppressKeyPress = true;
+            var hits = Matches(box.Text);
+            if (hits.Count == 0) return;
+            at = e.KeyCode == Keys.Down ? Math.Min(at + 1, hits.Count - 1) : Math.Max(at - 1, 0);
+            box.Text = hits[at];
+            box.SelectionStart = box.Text.Length;
+            status = "";
+            Invalidate();
+        }
+
+        List<string> Matches(string typed)
+        {
+            var hits = new List<string>();
+            typed = (typed ?? "").Trim();
+            if (typed.Length == 0) { hits.AddRange(list); return hits; }
+            foreach (var n in list) if (n.IndexOf(typed, StringComparison.OrdinalIgnoreCase) >= 0) hits.Add(n);
+            return hits;
+        }
+
+        void Commit()
+        {
+            string typed = (box.Text ?? "").Trim();
+            if (typed.Length == 0) { Close(); return; }
+            var known = Cities.Find(typed);
+            if (known != null) { Close(); done((string)known[0]); return; }
+            if (busy) return;
+            busy = true;
+            status = Lang.T("Mencari lokasi…");
+            Invalidate();
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate
+            {
+                string error;
+                var found = Cities.Search(typed, out error);
+                try
+                {
+                    BeginInvoke(new Action(delegate
+                    {
+                        busy = false;
+                        if (found.Count == 0)
+                        {
+                            status = error != null ? Lang.T("Pencarian gagal, coba lagi") : Lang.T("Lokasi tidak ditemukan");
+                            Invalidate();
+                            return;
+                        }
+                        // Best name match wins; the list is alphabetical, not ranked
+                        var hit = found[0];
+                        string packed = Cities.Pack((string)hit[0], Convert.ToDouble(hit[1]), Convert.ToDouble(hit[2]), Convert.ToDouble(hit[3]));
+                        string label = (string)hit[0];
+                        Close();
+                        done(Cities.IsPacked(packed) ? packed : label);
+                    }));
+                }
+                catch (InvalidOperationException) { }
+            });
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.Clear(KitInk.Window);
+            KitInk.Smooth(g);
+            float s = Ui;
+            var well = new RectangleF(16 * s, 12 * s, ClientSize.Width - 32 * s, 44 * s);
+            using (var path = Ink.Round(well, 12 * s))
+            {
+                using (var b = new SolidBrush(KitInk.Group)) g.FillPath(b, path);
+                using (var pen = new Pen(KitInk.Faint, 1.2f)) g.DrawPath(pen, path);
+            }
+            using (var f = UiFont(12.5f))
+            {
+                string line = status.Length > 0 ? status : Hint();
+                KitInk.Draw(g, line, f, KitInk.Sub, new RectangleF(20 * s, ClientSize.Height - 44 * s, ClientSize.Width - 40 * s, 30 * s), ContentAlignment.MiddleLeft);
+            }
+        }
+
+        // What Enter will do, said plainly
+        string Hint()
+        {
+            string typed = (box.Text ?? "").Trim();
+            if (typed.Length == 0) return Lang.T("Ketik untuk menyaring; Enter memakai kota ini");
+            if (Cities.Find(typed) != null) return Lang.T("Enter memakai ") + typed;
+            return Lang.T("Enter mencari ") + "\"" + typed + "\"";
+        }
+    }
 }
+
