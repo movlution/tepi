@@ -245,19 +245,22 @@ namespace Tepi
         {
             if (!ShelfOn)
             {
-                float by = Empty(w, '', Lang.T("Rak mati"), Lang.T("Berkas yang diseret ke island tidak ditahan"));
-                Button(new RectangleF(w / 2 - 74, by, 148, 34), "shelfOn", Lang.T("Nyalakan"), true, delegate { SetFlag("shelf", true); });
+                EmptyState(new RectangleF(0, PanelTop, w, h - PanelTop), '', Lang.T("Rak mati"), Lang.T("Berkas yang diseret ke island tidak ditahan"), Lang.T("Nyalakan"), "shelfOn", delegate { SetFlag("shelf", true); }, PillKind.Primary);
                 return;
             }
             if (shelf.Count == 0)
             {
-                float by = Empty(w, '', Lang.T("Rak kosong"), Lang.T("Seret berkas ke island, atau pilih dari folder"));
                 if (shelfPaste)
                 {
-                    Button(new RectangleF(w / 2 - 148, by, 140, 34), "shelfPick", Lang.T("Pilih berkas"), true, PickShelfFiles);
-                    Button(new RectangleF(w / 2 + 8, by, 140, 34), "shelfPasteBtn", Lang.T("Tempel"), false, PasteToShelf);
+                    EmptyState(new RectangleF(0, PanelTop, w, h - PanelTop), '', Lang.T("Rak kosong"), Lang.T("Seret berkas ke island, atau pilih dari folder"),
+                        Lang.T("Pilih berkas"), "shelfPick", PickShelfFiles, PillKind.Primary,
+                        Lang.T("Tempel"), "shelfPasteBtn", PasteToShelf, PillKind.Secondary);
                 }
-                else Button(new RectangleF(w / 2 - 74, by, 148, 34), "shelfPick", Lang.T("Pilih berkas"), true, PickShelfFiles);
+                else
+                {
+                    EmptyState(new RectangleF(0, PanelTop, w, h - PanelTop), '', Lang.T("Rak kosong"), Lang.T("Seret berkas ke island, atau pilih dari folder"),
+                        Lang.T("Pilih berkas"), "shelfPick", PickShelfFiles, PillKind.Primary);
+                }
                 return;
             }
             int cols = ShelfCols(w);
@@ -293,7 +296,7 @@ namespace Tepi
             var hit = RectangleF.Inflate(cell, -4, -4);
             AddHit(hit, "shelfAdd", PickShelfFiles);
             bool hover = Hover("shelfAdd");
-            if (hover) p.FillRound(hit, 16, Pressed("shelfAdd") ? p.T.FillHover : p.T.Fill);
+            if (hover) p.FillRound(hit, Ink.RadiusControl, Pressed("shelfAdd") ? p.T.FillPressed : p.T.FillHover);
             var box = new RectangleF(cell.X + cell.Width / 2 - ShelfThumbPx / 2, cell.Y + 10, ShelfThumbPx, ShelfThumbPx);
             using (var pen = new Pen(Ink.A(p.T.Text, (hover ? 0.6f : 0.35f) * p.Alpha), 1.4f) { DashPattern = new[] { 4f, 3f } })
             using (var path = Ink.Round(box, 12)) g.DrawPath(pen, path);
@@ -310,7 +313,7 @@ namespace Tepi
             var hit = RectangleF.Inflate(cell, -4, -4);
             AddHit(hit, "shelfPaste", PasteToShelf);
             bool hover = Hover("shelfPaste");
-            if (hover) p.FillRound(hit, 16, Pressed("shelfPaste") ? p.T.FillHover : p.T.Fill);
+            if (hover) p.FillRound(hit, Ink.RadiusControl, Pressed("shelfPaste") ? p.T.FillPressed : p.T.FillHover);
             var box = new RectangleF(cell.X + cell.Width / 2 - ShelfThumbPx / 2, cell.Y + 10, ShelfThumbPx, ShelfThumbPx);
             using (var pen = new Pen(Ink.A(p.T.Text, (hover ? 0.6f : 0.35f) * p.Alpha), 1.4f) { DashPattern = new[] { 4f, 3f } })
             using (var path = Ink.Round(box, 12)) g.DrawPath(pen, path);
@@ -338,8 +341,8 @@ namespace Tepi
             var hit = RectangleF.Inflate(cell, -4, -4);
             AddHit(hit, id, delegate { ShelfClick(it); });
             bool hover = Hover(id) || Hover(del), picked = shelfPicked.Contains(item.Id);
-            if (hover || picked) p.FillRound(hit, 16, Pressed(id) || picked ? p.T.FillHover : p.T.Fill);
-            if (picked) p.StrokeRound(hit, 16, p.T.Accent, 1.6f);
+            if (hover || picked) p.FillRound(hit, Ink.RadiusControl, Pressed(id) || picked ? p.T.FillPressed : p.T.FillHover);
+            if (picked) p.StrokeRound(hit, Ink.RadiusControl, p.T.Accent, 1.6f);
             if (Pressed(id)) ShelfMouseDown(it);
             var thumb = new RectangleF(cell.X + cell.Width / 2 - ShelfThumbPx / 2, cell.Y + 10, ShelfThumbPx, ShelfThumbPx);
             DrawShelfThumb(item, thumb, 12);

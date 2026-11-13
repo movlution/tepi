@@ -213,10 +213,10 @@ namespace Tepi
             // Glass catches light on its top edge, a little on the bottom
             void RimLight(RectangleF r, GraphicsPath path)
             {
-                using (var lg = new LinearGradientBrush(new RectangleF(r.X, r.Y - 1, r.Width, r.Height + 2), Color.White, Color.White, 90f))
+                using (var lg = new LinearGradientBrush(new RectangleF(r.X, r.Y - 1, r.Width, r.Height + 2), p.T.Highlight, p.T.Highlight, 90f))
                 {
                     var cb = new ColorBlend(3);
-                    cb.Colors = new[] { Color.FromArgb(Ink.Light ? 170 : 120, 255, 255, 255), Color.FromArgb(Ink.Light ? 50 : 16, 255, 255, 255), Color.FromArgb(Ink.Light ? 110 : 52, 255, 255, 255) };
+                    cb.Colors = new[] { Color.FromArgb(Ink.Light ? 170 : 120, p.T.Highlight), Color.FromArgb(Ink.Light ? 50 : 16, p.T.Highlight), Color.FromArgb(Ink.Light ? 110 : 52, p.T.Highlight) };
                     cb.Positions = new[] { 0f, 0.5f, 1f };
                     lg.InterpolationColors = cb;
                     using (var pen = new Pen(lg, 1f)) g.DrawPath(pen, path);
@@ -234,7 +234,7 @@ namespace Tepi
             void Sheen(RectangleF r)
             {
                 float h = Math.Min(r.Height * 0.55f, 28);
-                using (var lg = new LinearGradientBrush(new RectangleF(r.X, r.Y - 1, r.Width, h + 2), Color.FromArgb(Ink.Light ? 80 : 24, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90f))
+                using (var lg = new LinearGradientBrush(new RectangleF(r.X, r.Y - 1, r.Width, h + 2), Color.FromArgb(Ink.Light ? 80 : 24, p.T.Highlight), Color.FromArgb(0, p.T.Highlight), 90f))
                     g.FillRectangle(lg, r.X, r.Y, r.Width, h);
                 if (hover.Value < 0.01f || mouseX < r.Left - 60 || mouseX > r.Right + 60) return;
                 float rx = Math.Max(70, r.Height * 1.7f), ry = r.Height * 1.05f;
@@ -243,8 +243,8 @@ namespace Tepi
                     gp.AddEllipse(mouseX - rx, r.Top - ry * 0.55f, rx * 2, ry * 2);
                     using (var pb = new PathGradientBrush(gp))
                     {
-                        pb.CenterColor = Color.FromArgb((int)(hover.Value * (Ink.Light ? 80 : 40)), 255, 255, 255);
-                        pb.SurroundColors = new[] { Color.FromArgb(0, 255, 255, 255) };
+                        pb.CenterColor = Color.FromArgb((int)(hover.Value * (Ink.Light ? 80 : 40)), p.T.Highlight);
+                        pb.SurroundColors = new[] { Color.FromArgb(0, p.T.Highlight) };
                         g.FillPath(pb, gp);
                     }
                 }
@@ -257,11 +257,11 @@ namespace Tepi
                 float span = Math.Max(60, r.Height * 1.5f);
                 float a = Math.Max(r.Left + radius * 0.7f, mouseX - span), b = Math.Min(r.Right - radius * 0.7f, mouseX + span);
                 if (b - a < 2) return;
-                using (var lg = new LinearGradientBrush(new PointF(mouseX - span, 0), new PointF(mouseX + span, 0), Color.FromArgb(0, 255, 255, 255), Color.FromArgb(0, 255, 255, 255)))
+                using (var lg = new LinearGradientBrush(new PointF(mouseX - span, 0), new PointF(mouseX + span, 0), Color.FromArgb(0, p.T.Highlight), Color.FromArgb(0, p.T.Highlight)))
                 {
                     var blend = new ColorBlend(3);
                     int peak = (int)(hover.Value * (Ink.Light ? 230 : 150));
-                    blend.Colors = new[] { Color.FromArgb(0, 255, 255, 255), Color.FromArgb(peak, 255, 255, 255), Color.FromArgb(0, 255, 255, 255) };
+                    blend.Colors = new[] { Color.FromArgb(0, p.T.Highlight), Color.FromArgb(peak, p.T.Highlight), Color.FromArgb(0, p.T.Highlight) };
                     blend.Positions = new[] { 0f, 0.5f, 1f };
                     lg.InterpolationColors = blend;
                     using (var pen = new Pen(lg, 1.3f)) g.DrawLine(pen, a, r.Top + 0.65f, b, r.Top + 0.65f);
@@ -336,9 +336,33 @@ namespace Tepi
                 Hit(s.Hit, s.Id, delegate { OpenApp(app, false); }, delegate { AppMenu(app); });
                 bool focus = keyMode && keySel == s.Id;
                 bool hot = (hoverId == s.Id && dragApp == null) || focus, down = pressId == s.Id && dragApp == null;
-                Plate(OnBar(s.Icon, HopLift(a), down), hot, down, s.Show);
+                var now = DateTime.UtcNow;
+                Plate(OnBar(s.Icon, HopLift(a, now), down), hot, down, s.Show);
                 if (focus) FocusRing(s.Icon);
                 var r = Glyph(down ? Inset(s.Icon, s.Icon.Width * 0.05f) : s.Icon);
+                float sx, sy;
+                HopScale(a, now, out sx, out sy);
+                float rw = r.Width * sx, rh = r.Height * sy;
+                r = new RectangleF(r.X + (r.Width - rw) / 2, r.Bottom - rh, rw, rh);
+                if (!Anim.Reduced)
+                {
+                    double lt = a.LaunchUtc > DateTime.MinValue ? (now - a.LaunchUtc).TotalSeconds : 9;
+                    double pt = a.PulseUtc > DateTime.MinValue ? (now - a.PulseUtc).TotalSeconds : 9;
+                    if (lt >= 0 && lt < 0.62)
+                    {
+                        float u = (float)(lt / 0.62), eu = Ease.OutCubic(u);
+                        float grow = r.Width * (0.14f + 0.52f * eu);
+                        var halo = new RectangleF(r.X - grow / 2, r.Y - grow / 2, r.Width + grow, r.Height + grow);
+                        p.StrokeRound(halo, halo.Width * 0.30f, Ink.A(p.T.Text, 0.34f * (1 - u)), 2.2f * (1 - u * 0.5f));
+                    }
+                    else if (pt >= 0 && pt < 0.38)
+                    {
+                        float u = (float)(pt / 0.38), eu = Ease.OutCubic(u);
+                        float grow = r.Width * (0.08f + 0.36f * eu);
+                        var halo = new RectangleF(r.X - grow / 2, r.Y - grow / 2, r.Width + grow, r.Height + grow);
+                        p.StrokeRound(halo, halo.Width * 0.30f, Ink.A(p.T.Text, 0.28f * (1 - u)), 1.8f * (1 - u * 0.5f));
+                    }
+                }
                 DrawIconImage(a, r, s.Show);
                 Indicator(a, s.Icon);
                 if (a.Badge > 0 && s.Show > 0.5f) Badge(s.Icon, a.Badge);
@@ -644,9 +668,6 @@ namespace Tepi
                 p.FillRound(new RectangleF(cx - w / 2, cy - h / 2, w, h), h / 2, Ink.A(c, Ease.Clamp01(v)));
             }
 
-            // White numbers on it reach 4.77:1
-            static readonly Color BadgeRed = Color.FromArgb(255, 217, 48, 37);
-
             // Unread count from Windows notifications
             void Badge(RectangleF r, int n)
             {
@@ -654,9 +675,115 @@ namespace Tepi
                 var f = Ink.SmallSemi(11f);
                 float h = 17, w = Math.Max(h, p.Measure(s, f) + 9);
                 var b = new RectangleF(r.Right - w * 0.7f, r.Top - h * 0.28f, w, h);
-                p.FillRound(Inset(b, -1.2f), (h + 2.4f) / 2, Ink.A(Ink.Base.Bg, 0.55f));
-                p.FillRound(b, h / 2, BadgeRed);
-                p.TextCenter(s, f, Color.White, b.X + b.Width / 2, b.Y + h / 2);
+                p.FillRound(Inset(b, -1.2f), (h + 2.4f) / 2, Ink.A(p.T.Bg, 0.55f));
+                p.FillRound(b, h / 2, p.T.Negative);
+                p.TextCenter(s, f, p.T.IsDark ? p.T.Bg : Color.White, b.X + b.Width / 2, b.Y + h / 2);
+            }
+
+            sealed class DockFlyer
+            {
+                public Bitmap Img;
+                public Rectangle Src;
+                public RectangleF From;
+                public float Vx, Vy, Spin, Delay;
+            }
+
+            readonly List<DockFlyer> dockFlyers = new List<DockFlyer>();
+            readonly List<Bitmap> dockFlyerImgs = new List<Bitmap>();
+            DateTime dockFlyUtc = DateTime.MinValue;
+            const double DockScatterSecs = 0.44;
+
+            bool DockFlyersMoving(DateTime now)
+            {
+                if (dockFlyers.Count == 0) return false;
+                if ((now - dockFlyUtc).TotalSeconds < DockScatterSecs + 0.12) return true;
+                ClearDockFlyers();
+                return false;
+            }
+
+            void ClearDockFlyers()
+            {
+                dockFlyers.Clear();
+                foreach (var b in dockFlyerImgs) b.Dispose();
+                dockFlyerImgs.Clear();
+            }
+
+            void ShatterDockIcon(DockApp a, RectangleF r)
+            {
+                if (Anim.Reduced || a == null || r.Width < 8 || r.Height < 8) return;
+                Bitmap src;
+                icons.TryGetValue(a.Key, out src);
+                Bitmap bmp;
+                if (src != null) bmp = new Bitmap(src);
+                else
+                {
+                    bmp = new Bitmap(48, 48, PixelFormat.Format32bppPArgb);
+                    using (var bg = Graphics.FromImage(bmp))
+                    {
+                        var bp = new Painter { G = bg, T = p.T };
+                        bg.SmoothingMode = SmoothingMode.AntiAlias;
+                        bp.FillRound(new RectangleF(2, 2, 44, 44), 12, p.T.FillHover);
+                        bp.TextCenter(a.Name.Length > 0 ? a.Name.Substring(0, 1).ToUpperInvariant() : "?", Ink.Semi(22f), p.T.Text, 24, 24);
+                    }
+                }
+                dockFlyerImgs.Add(bmp);
+                const int cols = 4, rows = 4;
+                float dw = r.Width / cols, dh = r.Height / rows;
+                float sw = (float)bmp.Width / cols, sh = (float)bmp.Height / rows;
+                for (int y = 0; y < rows; y++)
+                {
+                    for (int x = 0; x < cols; x++)
+                    {
+                        float nx = (x + 0.5f) / cols - 0.5f;
+                        float ny = (y + 0.5f) / rows - 0.5f;
+                        float hash = ((x * 7 + y * 13) % 9) / 9f - 0.5f;
+                        dockFlyers.Add(new DockFlyer
+                        {
+                            Img = bmp,
+                            Src = Rectangle.Round(new RectangleF(x * sw, y * sh, sw, sh)),
+                            From = new RectangleF(r.X + x * dw, r.Y + y * dh, dw, dh),
+                            Vx = nx * 170 + hash * 45,
+                            Vy = ny * 110 - 115 - Math.Abs(hash) * 55,
+                            Spin = nx * 300 + hash * 120,
+                            Delay = Math.Abs(nx) * 0.035f
+                        });
+                    }
+                }
+                dockFlyUtc = DateTime.UtcNow;
+            }
+
+            void DrawDockFlyers(DateTime now)
+            {
+                if (dockFlyers.Count == 0) return;
+                double t0 = (now - dockFlyUtc).TotalSeconds;
+                bool alive = false;
+                var keepMode = g.InterpolationMode;
+                g.InterpolationMode = InterpolationMode.Bilinear;
+                using (var ia = new ImageAttributes())
+                {
+                    var cm = new ColorMatrix();
+                    foreach (var f in dockFlyers)
+                    {
+                        float t = (float)((t0 - f.Delay) / DockScatterSecs);
+                        if (t >= 1) continue;
+                        alive = true;
+                        t = Math.Max(0, t);
+                        float x = f.From.X + f.Vx * t * (float)DockScatterSecs;
+                        float y = f.From.Y + (f.Vy * t + 420 * t * t) * (float)DockScatterSecs;
+                        float alpha = (1 - t) * (1 - t);
+                        cm.Matrix33 = alpha;
+                        ia.SetColorMatrix(cm);
+                        var dst = new RectangleF(x, y, f.From.Width, f.From.Height);
+                        var st = g.Save();
+                        g.TranslateTransform(dst.X + dst.Width / 2, dst.Y + dst.Height / 2);
+                        g.RotateTransform(f.Spin * t);
+                        var pts = new[] { new PointF(-dst.Width / 2, -dst.Height / 2), new PointF(dst.Width / 2, -dst.Height / 2), new PointF(-dst.Width / 2, dst.Height / 2) };
+                        g.DrawImage(f.Img, pts, f.Src, GraphicsUnit.Pixel, ia);
+                        g.Restore(st);
+                    }
+                }
+                g.InterpolationMode = keepMode;
+                if (!alive) ClearDockFlyers();
             }
 
             void DrawTop()
@@ -667,6 +794,7 @@ namespace Tepi
                 float t = labelShow.Value;
                 if (t > 0.01f && labelText.Length > 0 && !anchor.IsEmpty) DrawLabel(labelText, anchor, t);
                 if (dragApp != null) DrawDragGhost();
+                DrawDockFlyers(DateTime.UtcNow);
             }
 
             string LabelFor(string id, out RectangleF anchor)

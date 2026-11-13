@@ -324,7 +324,10 @@ namespace Tepi
                         fg.CompositingMode = CompositingMode.SourceOver;
                         // Liquid tints per pixel already
                         if (!job.Liquid)
-                            using (var tintBrush = new SolidBrush(Ink.A(job.Bg, BaseTint))) fg.FillRectangle(tintBrush, 0, 0, w, h);
+                        {
+                            float frostTint = ComputeFrostTint(sig, len, job.Bg, job.Light);
+                            using (var tintBrush = new SolidBrush(Ink.A(job.Bg, frostTint))) fg.FillRectangle(tintBrush, 0, 0, w, h);
+                        }
                     }
                     if (job.Panel)
                     {
@@ -379,6 +382,59 @@ namespace Tepi
 
         static float Luma(Color c) { return 0.2126f * Linear[c.R] + 0.7152f * Linear[c.G] + 0.0722f * Linear[c.B]; }
 
+        static readonly byte[] SrgbLut = BuildSrgbLut();
+
+        static byte[] BuildSrgbLut()
+        {
+            var t = new byte[4096];
+            for (int i = 0; i < 4096; i++)
+            {
+                double x = i / 4095.0;
+                double s = x <= 0.0031308 ? x * 12.92 : 1.055 * Math.Pow(x, 1.0 / 2.4) - 0.055;
+                t[i] = (byte)Math.Max(0, Math.Min(255, (int)Math.Round(s * 255.0)));
+            }
+            return t;
+        }
+
+        public static byte ToSrgb(float lin)
+        {
+            if (lin <= 0f) return 0;
+            if (lin >= 1f) return 255;
+            return SrgbLut[(int)(lin * 4095f)];
+        }
+
+        static float ComputeFrostTint(byte[] sig, int len, Color bg, bool light)
+        {
+            if (sig == null || len < 4) return BaseTint;
+            float sumLum = 0f;
+            int count = 0;
+            float peakLum = light ? 1f : 0f;
+            int maxIndex = Math.Min(len, sig.Length) - 4;
+            for (int i = 0; i <= maxIndex; i += 16)
+            {
+                float l = 0.2126f * Linear[sig[i + 2]] + 0.7152f * Linear[sig[i + 1]] + 0.0722f * Linear[sig[i]];
+                sumLum += l;
+                count++;
+                if (light) { if (l < peakLum) peakLum = l; }
+                else { if (l > peakLum) peakLum = l; }
+            }
+            float avgLum = count > 0 ? sumLum / count : (light ? 1f : 0f);
+            float sampleLum = avgLum * 0.4f + peakLum * 0.6f;
+
+            if (!light)
+            {
+                if (sampleLum <= 0.09f) return BaseTint;
+                float req = BaseTint + (0.67f - BaseTint) * ((sampleLum - 0.09f) / (1.0f - 0.09f));
+                return Math.Max(BaseTint, Math.Min(0.67f, req));
+            }
+            else
+            {
+                if (sampleLum >= 0.62f) return BaseTint;
+                float req = BaseTint + (0.84f - BaseTint) * ((0.62f - sampleLum) / 0.62f);
+                return Math.Max(BaseTint, Math.Min(0.84f, req));
+            }
+        }
+
         // Liquid: vivid edges, tint where text needs
         static void LiquidPass(Bitmap tiny, byte[] raw, Color bg, bool light)
         {
@@ -397,6 +453,7 @@ namespace Tepi
             BoxBlur(src, stride, w, h, 2);
             // Vignette: 1 at centre, 0 at edges
             float cx = (w - 1) / 2f, cy = h * 0.4f, rx = Math.Max(1, w * 0.46f), ry = Math.Max(1, h * 0.55f);
+            float linBgB = Linear[bg.B], linBgG = Linear[bg.G], linBgR = Linear[bg.R];
             var data = tiny.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format32bppRgb);
             try
             {
@@ -410,15 +467,19 @@ namespace Tepi
                         float b = soft[i] + (src[i] - soft[i]) * v, gr = soft[i + 1] + (src[i + 1] - soft[i + 1]) * v, r = soft[i + 2] + (src[i + 2] - soft[i + 2]) * v;
                         float grey = 0.2126f * r + 0.7152f * gr + 0.0722f * b, sat = 1.25f + 0.35f * (1 - v);
                         r = Sat(grey, r, sat); gr = Sat(grey, gr, sat); b = Sat(grey, b, sat);
-                        float lum = 0.2126f * Linear[(int)r] + 0.7152f * Linear[(int)gr] + 0.0722f * Linear[(int)b];
+                        int ir = (int)Math.Max(0, Math.Min(255, r));
+                        int igr = (int)Math.Max(0, Math.Min(255, gr));
+                        int ib = (int)Math.Max(0, Math.Min(255, b));
+                        float linR = Linear[ir], linG = Linear[igr], linB = Linear[ib];
+                        float lum = 0.2126f * linR + 0.7152f * linG + 0.0722f * linB;
                         float a = light ? (lum < limit ? (limit - lum) / Math.Max(0.001f, lt - lum) : 0)
                                         : (lum > limit ? (lum - limit) / Math.Max(0.001f, lum - lt) : 0);
                         // Contrast guard; floor deepens toward centre
                         float floor = aMin - 0.06f + 0.14f * v;
                         a = a < floor ? floor : a > aMax ? aMax : a;
-                        outPx[i] = (byte)(b + (bg.B - b) * a);
-                        outPx[i + 1] = (byte)(gr + (bg.G - gr) * a);
-                        outPx[i + 2] = (byte)(r + (bg.R - r) * a);
+                        outPx[i] = ToSrgb(linB + (linBgB - linB) * a);
+                        outPx[i + 1] = ToSrgb(linG + (linBgG - linG) * a);
+                        outPx[i + 2] = ToSrgb(linR + (linBgR - linR) * a);
                         outPx[i + 3] = 255;
                     }
                 Marshal.Copy(outPx, 0, data.Scan0, outPx.Length);

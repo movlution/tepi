@@ -109,8 +109,7 @@ namespace Tepi
         {
             if (!ConvertSetting)
             {
-                float by = Empty(w, IcoConvert, Lang.T("Ubah format mati"), Lang.T("Berkas yang diseret ke island hanya bisa ditaruh di rak"));
-                Button(new RectangleF(w / 2 - 74, by, 148, 34), "convOn", Lang.T("Nyalakan"), true, delegate { SetFlag("convert", true); });
+                EmptyState(new RectangleF(0, PanelTop, w, h - PanelTop), IcoConvert, Lang.T("Ubah format mati"), Lang.T("Berkas yang diseret ke island hanya bisa ditaruh di rak"), Lang.T("Nyalakan"), "convOn", delegate { SetFlag("convert", true); }, PillKind.Primary);
                 return;
             }
             var shown = pageSwitchUtc > panelOpenedUtc ? pageSwitchUtc : panelOpenedUtc;
@@ -131,7 +130,7 @@ namespace Tepi
         {
             AddHit(box, "convPick", PickConvertFiles);
             bool hover = Hover("convPick");
-            p.FillRound(box, 22, Pressed("convPick") ? p.T.FillPressed : hover ? p.T.FillHover : p.T.Fill);
+            p.FillRound(box, Ink.RadiusModule, Pressed("convPick") ? p.T.FillPressed : hover ? p.T.FillHover : p.T.Fill);
             using (var pen = new Pen(Ink.A(p.T.Text, (hover ? 0.42f : 0.22f) * p.Alpha), 1.4f) { DashPattern = new[] { 4f, 3f } })
             using (var path = Ink.Round(RectangleF.Inflate(box, -6, -6), 17)) g.DrawPath(pen, path);
             convArt = new RectangleF(box.X + 18, box.Y + 14, 150, box.Height - 28);
@@ -222,7 +221,7 @@ namespace Tepi
                 var row = new RectangleF(area.X + 4, y + 2, area.Width - 8, ConvRowH - 4);
                 string id = "convh" + d.Item.Id;
                 bool hover = Hover(id);
-                if (hover) p.FillRound(row, 14, Pressed(id) ? p.T.FillHover : p.T.Fill);
+                if (hover) p.FillRound(row, Ink.RadiusControl, Pressed(id) ? p.T.FillPressed : p.T.FillHover);
                 float rcy = row.Y + row.Height / 2;
                 DrawShelfThumb(d.Item, new RectangleF(row.X + 10, rcy - 17, 34, 34), 9);
                 float tx = row.X + 56;

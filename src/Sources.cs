@@ -984,8 +984,7 @@ namespace Tepi
             bool any = sources != null && sources.Any;
             string title = !any ? Lang.T("Belum ada yang tersambung") : forTasks ? Lang.T("Belum ada sumber tugas") : Lang.T("Belum ada sumber jadwal");
             string detail = !any ? Lang.T("Kulia, Notion, Todoist, atau kalender iCal") : forTasks ? Lang.T("Kulia, Notion, Todoist, atau kalender tugas") : Lang.T("Kulia, atau kalender Google, Outlook, iCloud");
-            float by = Empty(w, Ink.IcoCalendar, title, detail);
-            Button(new RectangleF(w / 2 - 80, by, 160, 34), id, Lang.T("Buka Integrasi"), true, delegate { OpenIntegrations(); });
+            EmptyState(new RectangleF(0, PanelTop, w, PanelHeight() - PanelTop - 10), Ink.IcoCalendar, title, detail, Lang.T("Buka Integrasi"), id, delegate { OpenIntegrations(); }, PillKind.Primary);
         }
 
         void OpenIntegrations()

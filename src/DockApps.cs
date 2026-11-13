@@ -27,7 +27,7 @@ namespace Tepi
         public string Key = "", Target = "", Exe = "", AppId = "", Name = "";
         public bool Pinned, Packaged, Attention, Leaving;
         public readonly List<DockWin> Wins = new List<DockWin>();
-        public DateTime LaunchUtc = DateTime.MinValue;
+        public DateTime LaunchUtc = DateTime.MinValue, PulseUtc = DateTime.MinValue, GulpUtc = DateTime.MinValue;
         public int Badge;
         // Slot, size, presence, indicator: kept while on the dock
         public readonly Spring X = new Spring(0, 1, 1, 0.05f), Grow = new Spring(1, 1, 1, 0.0005f), Show = new Spring(0, 1, 1, 0.002f), Dot = new Spring(0, 1, 1, 0.003f);

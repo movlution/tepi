@@ -142,6 +142,7 @@ namespace Tepi
                 float aMin = text ? (light ? 0.3f : 0.26f) : 0.08f, aMax = text ? 0.9f : 0.7f, sat = text ? 1.25f : 1.45f;
                 Buffer.BlockCopy(raw, 0, dst, 0, raw.Length);
                 BoxBlur(dst, stride, w, h, text ? 2 : 1);
+                float linBgB = Linear[bg.B], linBgG = Linear[bg.G], linBgR = Linear[bg.R];
                 for (int y = 0; y < h; y++)
                     for (int x = 0; x < w; x++)
                     {
@@ -151,13 +152,17 @@ namespace Tepi
                         r = Sat(grey, r, sat);
                         gr = Sat(grey, gr, sat);
                         b = Sat(grey, b, sat);
-                        float lum = 0.2126f * Linear[(int)r] + 0.7152f * Linear[(int)gr] + 0.0722f * Linear[(int)b];
+                        int ir = (int)Math.Max(0, Math.Min(255, r));
+                        int igr = (int)Math.Max(0, Math.Min(255, gr));
+                        int ib = (int)Math.Max(0, Math.Min(255, b));
+                        float linR = Linear[ir], linG = Linear[igr], linB = Linear[ib];
+                        float lum = 0.2126f * linR + 0.7152f * linG + 0.0722f * linB;
                         float a = light ? (lum < limit ? (limit - lum) / Math.Max(0.001f, lt - lum) : 0)
                                         : (lum > limit ? (lum - limit) / Math.Max(0.001f, lum - lt) : 0);
                         a = a < aMin ? aMin : a > aMax ? aMax : a;
-                        dst[i] = (byte)(b + (bg.B - b) * a);
-                        dst[i + 1] = (byte)(gr + (bg.G - gr) * a);
-                        dst[i + 2] = (byte)(r + (bg.R - r) * a);
+                        dst[i] = ToSrgb(linB + (linBgB - linB) * a);
+                        dst[i + 1] = ToSrgb(linG + (linBgG - linG) * a);
+                        dst[i + 2] = ToSrgb(linR + (linBgR - linR) * a);
                         dst[i + 3] = 255;
                     }
             }

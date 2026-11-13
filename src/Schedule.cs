@@ -90,26 +90,25 @@ namespace Tepi
             }
             if (state == DataState.Failed)
             {
-                float ry = Empty(w, Ink.IcoCalendar, Lang.T("Jadwal gagal dimuat"), eventNote);
-                Button(new RectangleF(w / 2 - 60, ry, 120, 34), "retrySchedule", Lang.T("Coba lagi"), false, delegate { RefreshAll(2); });
+                EmptyState(new RectangleF(0, PanelTop, w, h - PanelTop), Ink.IcoCalendar, Lang.T("Jadwal gagal dimuat"), eventNote, Lang.T("Coba lagi"), "retrySchedule", delegate { RefreshAll(2); }, PillKind.Secondary);
                 return;
             }
             if (state == DataState.Loading)
             {
-                Empty(w, Ink.IcoCalendar, Lang.T("Memuat jadwal…"), "");
+                EmptyState(new RectangleF(0, PanelTop, w, h - PanelTop), Ink.IcoCalendar, Lang.T("Memuat jadwal…"), "");
                 return;
             }
             if (state == DataState.Empty)
             {
                 bool kuliaOnly = OnlyKuliaEvents;
-                Empty(w, Ink.IcoCalendar, kuliaOnly ? Lang.T("Tidak ada kelas") : Lang.T("Jadwal kosong"), eventNote ?? (kuliaOnly ? Lang.T("7 hari ke depan kosong") : Lang.T("3 minggu ke depan kosong")));
+                EmptyState(new RectangleF(0, PanelTop, w, h - PanelTop), Ink.IcoCalendar, kuliaOnly ? Lang.T("Tidak ada kelas") : Lang.T("Jadwal kosong"), eventNote ?? (kuliaOnly ? Lang.T("7 hari ke depan kosong") : Lang.T("3 minggu ke depan kosong")));
                 return;
             }
             var nowLocal = DateTime.Now;
             // Hero: the class that matters next
             var next = NextClass();
             var hero = new RectangleF(16, PanelTop + 4, w - 32, HeroH - 8);
-            p.FillRound(hero, 18, p.T.Fill);
+            p.FillRound(hero, Ink.RadiusModule, p.T.Fill);
             if (next != null)
             {
                 bool live = nowLocal >= next.Start;

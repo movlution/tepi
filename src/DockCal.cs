@@ -13,6 +13,10 @@ namespace Tepi
         {
             readonly System.Windows.Forms.Timer refresh = new System.Windows.Forms.Timer { Interval = 1000 };
             int month, rows, first;
+            string pressedId;
+            DateTime? _selectedDay;
+            public DateTime? selectedDay { get { return _selectedDay; } set { _selectedDay = value; } }
+            public DateTime? SelectedDay { get { return _selectedDay; } set { _selectedDay = value; } }
             float notifH;
 
             const float Pad = 20, RowH = 58, Cell = 44, CellH = 38, Foot = 52, MaxRows = 4;
@@ -21,6 +25,25 @@ namespace Tepi
             {
                 W = 360;
                 refresh.Tick += delegate { Render(); };
+            }
+
+            public bool Pressed(string id) { return Down(id); }
+            public new bool Down(string id) { return (pressedId == id || pressId == id) && hotId == id; }
+
+            protected override void OnMouseDown(MouseEventArgs e)
+            {
+                if (e.Button == MouseButtons.Left) pressedId = HitAt(e.Location);
+                base.OnMouseDown(e);
+            }
+            protected override void OnMouseUp(MouseEventArgs e)
+            {
+                pressedId = null;
+                base.OnMouseUp(e);
+            }
+            protected override void OnMouseLeave(EventArgs e)
+            {
+                pressedId = null;
+                base.OnMouseLeave(e);
             }
 
             protected override void Opening(Rectangle mon, int barTop)
@@ -53,8 +76,10 @@ namespace Tepi
                     float w = p.Measure(label, f) + 24;
                     var b = new RectangleF(W - Pad - w, 13, w, 26);
                     Hit(b, "clear");
-                    p.FillRound(b, 8, hotId == "clear" ? p.T.FillHover : p.T.Fill);
-                    p.TextCenter(label, f, p.T.Text, b.X + w / 2, 26);
+                    bool down = Down("clear");
+                    if (down) b.Offset(0, 0.75f);
+                    p.FillRound(b, 8, down ? p.T.FillPressed : hotId == "clear" ? p.T.FillHover : p.T.Fill);
+                    p.TextCenter(label, f, p.T.Text, b.X + w / 2, b.Y + b.Height / 2);
                 }
                 if (list.Count == 0)
                 {
@@ -86,8 +111,10 @@ namespace Tepi
                     if (hover)
                     {
                         Hit(x, del);
-                        p.Circle(x.X + 14, x.Y + 14, 12, hotId == del ? p.T.FillHover : p.T.Fill);
-                        p.Cross(x.X + 14, x.Y + 14, 10, p.T.Sub);
+                        bool xdown = Down(del);
+                        float xcy = x.Y + 14 + (xdown ? 0.75f : 0);
+                        p.Circle(x.X + 14, xcy, 12, xdown ? p.T.FillPressed : hotId == del ? p.T.FillHover : p.T.Fill);
+                        p.Cross(x.X + 14, xcy, 10, hotId == del ? p.T.Text : p.T.Sub);
                     }
                     else p.TextRight(Fmt.Ago(item.Time), Ink.Small(11f), p.T.Sub, row.Right - 12, cy - 9);
                 }
@@ -107,8 +134,21 @@ namespace Tepi
                 var today = DateTime.Today;
                 var shown = new DateTime(today.Year, today.Month, 1).AddMonths(month);
                 p.Text(today.ToString("dddd, d MMMM", ci), Ink.Semi(15f), p.T.Text, Pad + 4, top + 24, W - Pad * 2, StringAlignment.Near);
-                p.Text(shown.ToString("MMMM yyyy", ci), Ink.Small(12.5f), month == 0 ? p.T.Sub : p.T.Accent, Pad + 4, top + 54, 200, StringAlignment.Near);
-                if (month != 0) Hit(new RectangleF(Pad, top + 42, 160, 24), "today");
+                if (month != 0)
+                {
+                    string mText = shown.ToString("MMMM yyyy", ci);
+                    float mw = p.Measure(mText, Ink.Small(12.5f)) + 12;
+                    var tb = new RectangleF(Pad, top + 42, mw, 24);
+                    Hit(tb, "today");
+                    bool tdown = Down("today");
+                    if (tdown) tb.Offset(0, 0.75f);
+                    if (hotId == "today") p.FillRound(tb, 6, tdown ? p.T.FillPressed : p.T.FillHover);
+                    p.Text(mText, Ink.Small(12.5f), p.T.Accent, tb.X + 6, tb.Y + tb.Height / 2, mw, StringAlignment.Near);
+                }
+                else
+                {
+                    p.Text(shown.ToString("MMMM yyyy", ci), Ink.Small(12.5f), p.T.Sub, Pad + 4, top + 54, 200, StringAlignment.Near);
+                }
                 Button(new RectangleF(W - Pad - 34, top + 38, 32, 32), "next", (char)0xE76C, Lang.T("Bulan berikutnya"));
                 Button(new RectangleF(W - Pad - 70, top + 38, 32, 32), "prev", (char)0xE76B, Lang.T("Bulan sebelumnya"));
                 var dayOne = CultureInfo.CurrentCulture.DateTimeFormat.FirstDayOfWeek;
@@ -126,9 +166,25 @@ namespace Tepi
                     {
                         float cx = x0 + c * Cell + Cell / 2, cy = y + r * CellH + CellH / 2;
                         bool inMonth = day.Month == shown.Month, isToday = day == today;
-                        if (isToday) p.Circle(cx, cy, 16, p.T.Accent);
+                        string did = "d" + (day.Year * 10000 + day.Month * 100 + day.Day);
+                        Hit(new RectangleF(cx - 16, cy - 16, 32, 32), did);
+                        bool ddown = Down(did), dhot = hotId == did;
+                        float dcy = ddown ? cy + 0.75f : cy;
+                        if (isToday)
+                        {
+                            Color fill = ddown ? Ink.Mix(p.T.Accent, p.T.OnAccent, 0.22f) : dhot ? Ink.Mix(p.T.Accent, p.T.OnAccent, 0.1f) : p.T.Accent;
+                            p.Circle(cx, dcy, 16, fill);
+                        }
+                        else if (ddown || dhot)
+                        {
+                            p.Circle(cx, dcy, 16, ddown ? p.T.FillPressed : p.T.FillHover);
+                        }
+                        else if (selectedDay.HasValue && day == selectedDay.Value)
+                        {
+                            g.DrawEllipse(p.P(p.T.Accent, 1.2f), cx - 16, dcy - 16, 32, 32);
+                        }
                         p.TextCenter(day.Day.ToString(CultureInfo.InvariantCulture), isToday ? Ink.Semi(12.5f) : Ink.Small(12.5f),
-                                     isToday ? p.T.OnAccent : inMonth ? p.T.Text : p.T.Sub, cx, cy);
+                                     isToday ? p.T.OnAccent : inMonth ? p.T.Text : p.T.Sub, cx, dcy);
                     }
             }
 
@@ -140,9 +196,14 @@ namespace Tepi
                 string label = Lang.T("Senyap");
                 var b = new RectangleF(Pad - 4, cy - 15, p.Measure(label, f) + 46, 30);
                 Hit(b, "quiet");
-                p.FillRound(b, 15, quiet ? p.T.Accent : hotId == "quiet" ? p.T.FillHover : p.T.Fill);
-                p.Icon(Ink.IcoQuiet, 13f, quiet ? p.T.OnAccent : p.T.Text, b.X + 17, cy);
-                p.Text(label, f, quiet ? p.T.OnAccent : p.T.Text, b.X + 32, cy, b.Width - 36, StringAlignment.Near);
+                bool qdown = Down("quiet");
+                if (qdown) b.Offset(0, 0.75f);
+                Color qfill = quiet ? (qdown ? Ink.Mix(p.T.Accent, p.T.OnAccent, 0.22f) : hotId == "quiet" ? Ink.Mix(p.T.Accent, p.T.OnAccent, 0.1f) : p.T.Accent)
+                                    : (qdown ? p.T.FillPressed : hotId == "quiet" ? p.T.FillHover : p.T.Fill);
+                p.FillRound(b, 15, qfill);
+                float bcy = b.Y + b.Height / 2;
+                p.Icon(Ink.IcoQuiet, 13f, quiet ? p.T.OnAccent : p.T.Text, b.X + 17, bcy);
+                p.Text(label, f, quiet ? p.T.OnAccent : p.T.Text, b.X + 32, bcy, b.Width - 36, StringAlignment.Near);
                 Button(new RectangleF(W - Pad - 38, cy - 19, 38, 38), "gear", (char)0xE713, Lang.T("Tanggal dan waktu"));
             }
 
@@ -165,6 +226,17 @@ namespace Tepi
                 int n = IndexOf(id, 'n'), x = IndexOf(id, 'x');
                 if (n >= 0 && n < list.Count) { var item = list[n]; Done(); isle.OpenNotifApp(item); return; }
                 if (x >= 0 && x < list.Count) { isle.RemoveNotifs(new List<NotifItem> { list[x] }); return; }
+                int d = IndexOf(id, 'd');
+                if (d > 0)
+                {
+                    int dy = d / 10000, dm = (d / 100) % 100, dd = d % 100;
+                    var clicked = new DateTime(dy, dm, dd);
+                    selectedDay = clicked;
+                    var currShown = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(month);
+                    int mDiff = (clicked.Year - currShown.Year) * 12 + (clicked.Month - currShown.Month);
+                    if (mDiff != 0) month += mDiff;
+                    return;
+                }
                 switch (id)
                 {
                     case "clear": isle.RemoveNotifs(new List<NotifItem>(list)); break;

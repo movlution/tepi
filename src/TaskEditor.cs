@@ -100,7 +100,7 @@ namespace Tepi
             else if (warning.Text == "Tenggat sudah lewat") warning.Text = "";
             date.AccessibleDescription = "Tanggal tenggat";
             time.AccessibleDescription = "Jam tenggat lokal";
-            warning.ForeColor = Color.IndianRed;
+            warning.ForeColor = Ink.Base.Negative;
         }
 
         protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); Relayout(); }
@@ -122,7 +122,7 @@ namespace Tepi
             time.SetBounds((int)(288*s), (int)(130*s), (int)(172*s), (int)(30*s));
             star.SetBounds((int)(20*s), (int)(174*s), (int)(140*s), (int)(28*s));
             done.SetBounds((int)(170*s), (int)(174*s), (int)(140*s), (int)(28*s));
-            warning.SetBounds((int)(20*s), (int)(212*s), (int)(440*s), (int)(30*s)); warning.ForeColor = Color.IndianRed;
+            warning.SetBounds((int)(20*s), (int)(212*s), (int)(440*s), (int)(30*s)); warning.ForeColor = Ink.Base.Negative;
             cancel.SetBounds((int)(250*s), (int)(258*s), (int)(100*s), (int)(34*s));
             save.SetBounds((int)(360*s), (int)(258*s), (int)(100*s), (int)(34*s));
             ClientSize = new Size((int)(480*s), (int)(310*s));

@@ -60,11 +60,28 @@ namespace Tepi
             bool light = ThemeLight();
             if (light == Ink.Light) return;
             Ink.Apply(light);
+            string curHex = settings.Get("accent", "");
+            if (!string.IsNullOrEmpty(curHex))
+            {
+                for (int i = 0; i < Accents.Length; i++)
+                {
+                    if (Accents[i][1] == curHex || AccentsLight[i][1] == curHex)
+                    {
+                        string newHex = light ? AccentsLight[i][1] : Accents[i][1];
+                        if (newHex != curHex)
+                        {
+                            settings.Set("accent", newHex);
+                            settings.Save();
+                            Ink.SetAccent(newHex);
+                        }
+                        break;
+                    }
+                }
+            }
             WallApply();
             ResetFrost();
-            if (prefs != null && !prefs.IsDisposed) prefs.Relayout();
-            if (chatWin != null && !chatWin.IsDisposed) chatWin.Relayout();
             if (dockWin != null) dockWin.Changed();
+            KitWindow.BroadcastThemeChange();
             Kick();
         }
 
@@ -77,6 +94,8 @@ namespace Tepi
             albumTinted = false;
             AlbumAccent();
             WallApply();
+            if (dockWin != null) dockWin.Changed();
+            KitWindow.BroadcastThemeChange();
             Kick();
         }
 
@@ -178,9 +197,26 @@ namespace Tepi
 
         static readonly string[][] Accents =
         {
-            new[] { "Monokrom", "" }, new[] { "Biru", "#4C8DFF" }, new[] { "Hijau", "#3DD68C" }, new[] { "Kuning", "#FFD24A" },
-            new[] { "Oranye", "#FF9F43" }, new[] { "Merah muda", "#FF6B9A" }, new[] { "Ungu", "#A78BFA" }, new[] { "Navy", "#7F8DC6" },
-            new[] { "Dari sampul album", AccentAlbum },
+            new[] { "Biru", "#4C8DFF" },
+            new[] { "Ungu", "#A78BFA" },
+            new[] { "Merah muda", "#FF6B9A" },
+            new[] { "Merah", "#FF5252" },
+            new[] { "Oranye", "#FF9F43" },
+            new[] { "Kuning", "#FFD24A" },
+            new[] { "Hijau", "#3DD68C" },
+            new[] { "Grafit", "" },
+        };
+
+        static readonly string[][] AccentsLight =
+        {
+            new[] { "Biru", "#1668E8" },
+            new[] { "Ungu", "#6C3CE0" },
+            new[] { "Merah muda", "#C2185B" },
+            new[] { "Merah", "#C5221F" },
+            new[] { "Oranye", "#A84B00" },
+            new[] { "Kuning", "#855E00" },
+            new[] { "Hijau", "#107C41" },
+            new[] { "Grafit", "" },
         };
 
         partial class PrefsWindow : KitWindow
@@ -922,7 +958,8 @@ namespace Tepi
                 if (key == "bg") return new[] { new[] { "Hitam", "#000000" }, new[] { "Arang", "#1C1C1E" }, new[] { "Navy", "#0E1734" }, new[] { "Hijau tua", "#0F2A22" }, new[] { "Putih", "#FFFFFF" }, new[] { "Krem", "#F5EFE6" } };
                 if (key == "text") return new[] { new[] { "Putih", "#FFFFFF" }, new[] { "Putih lembut", "#EEF4FF" }, new[] { "Hitam", "#111111" }, new[] { "Cokelat tua", "#3B2F2F" } };
                 var list = new System.Collections.Generic.List<string[]>();
-                foreach (var a in Accents) if (a[1].StartsWith("#")) list.Add(a);
+                var table = Ink.Light ? AccentsLight : Accents;
+                foreach (var a in table) if (a[1].StartsWith("#")) list.Add(a);
                 return list.ToArray();
             }
 
@@ -1065,6 +1102,7 @@ namespace Tepi
                         add(resetRow);
                         break;
                     case "look":
+                        cap(Lang.T("Gaya visual"));
                         string themeMode = settings.Get("theme", "gelap");
                         add(Row(Lang.T("Tema"), themeMode == "otomatis" ? Lang.T("Mengikuti mode aplikasi Windows") : null,
                             Seg(new[] { Lang.T("Gelap"), Lang.T("Terang"), Lang.T("Otomatis") }, themeMode == "terang" ? 1 : themeMode == "otomatis" ? 2 : 0, i =>
@@ -1072,22 +1110,53 @@ namespace Tepi
                                 island.SetThemeMode(i == 1 ? "terang" : i == 2 ? "otomatis" : "gelap");
                                 BeginInvoke(new Action(Relayout));
                             })));
+
+                        string accent = settings.Get("accent", "");
+                        bool custom = island.CustomOn;
+                        KitRow accentRow = null;
+                        var palette = new KitPalette
+                        {
+                            Presets = Accents,
+                            PresetsLight = AccentsLight,
+                            SelectedHex = accent,
+                            Enabled = !custom,
+                            Size = new Size((int)(240 * Ui), (int)(30 * Ui))
+                        };
+                        palette.Picked += (i, hex) =>
+                        {
+                            island.SetAccentHex(hex);
+                            if (accentRow != null)
+                            {
+                                accentRow.Detail = Lang.T(Accents[i][0]);
+                                accentRow.Invalidate();
+                            }
+                        };
+                        string curAccentName = Lang.T("Grafit");
+                        for (int i = 0; i < Accents.Length; i++)
+                        {
+                            if (Accents[i][1] == accent || AccentsLight[i][1] == accent)
+                            {
+                                curAccentName = Lang.T(Accents[i][0]);
+                                break;
+                            }
+                        }
+                        string accentDetail = custom ? Lang.T("Warna sendiri sedang dipakai") :
+                                              settings.Get("theme.pack", "").Length > 0 ? Lang.T("Paket tema bisa menimpanya") :
+                                              curAccentName;
+                        accentRow = Row(Lang.T("Warna aksen"), accentDetail, palette);
+                        add(accentRow);
+
                         string mat = island.MaterialName;
                         add(Row(Lang.T("Material"), Lang.T("Hitam paling hemat daya"),
                             Seg(new[] { "Liquid", "Frost", Lang.T("Hitam") }, mat == "frost" ? 1 : mat == "solid" ? 2 : 0, i => island.SetChoice("material", i == 1 ? "frost" : i == 2 ? "solid" : "liquid"))));
-                        var names = new List<string>();
-                        int at = 0;
-                        string accent = settings.Get("accent", "");
-                        for (int i = 0; i < Accents.Length; i++) { names.Add(Lang.T(Accents[i][0])); if (Accents[i][1] == accent) at = i; }
-                        bool custom = island.CustomOn;
-                        var accentPick = Popup(names.ToArray(), at, i => island.SetAccentHex(Accents[i][1]));
-                        accentPick.Enabled = !custom;
-                        add(Row(Lang.T("Aksen"), custom ? Lang.T("Warna sendiri sedang dipakai") : settings.Get("theme.pack", "").Length > 0 ? Lang.T("Paket tema bisa menimpanya") : null, accentPick));
-                        add(Row(Lang.T("Sinkronkan warna wallpaper"), custom ? Lang.T("Warna sendiri sedang dipakai") : Lang.T("Kaca notch dan dock, serta aksen, mengikuti warna wallpaper; blur tetap"), Switch("wall.sync", false, null)));
-                        cap(Lang.T("Warna sendiri"));
-                        add(Row(Lang.T("Pakai warna sendiri"), Lang.T("Menimpa warna paket tema, gambarnya tetap"), Switch("look.custom", false, on =>
+
+                        add(Row(Lang.T("Sinkronkan wallpaper"), custom ? Lang.T("Warna sendiri sedang dipakai") : Lang.T("Kaca dan aksen mengikuti wallpaper; blur tetap"), Switch("wall.sync", false, null)));
+
+                        cap(Lang.T("Kustomisasi"));
+                        add(Row(Lang.T("Warna kustom"), Lang.T("Pilih warna latar, teks, dan aksen manual"), Switch("look.custom", false, on =>
                         {
                             island.SetCustom(on);
+                            KitWindow.BroadcastThemeChange();
                             BeginInvoke(new Action(Relayout));
                         })));
                         if (custom)

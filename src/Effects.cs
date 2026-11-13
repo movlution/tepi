@@ -15,7 +15,8 @@ namespace Tepi
         public Rectangle Src;
         // Screen device pixels at capture
         public RectangleF From;
-        public bool Suck;
+        public PointF Target;
+        public bool Suck, Gulp;
         public float Delay, Vx, Vy, Spin;
     }
 
@@ -52,6 +53,17 @@ namespace Tepi
         // Capture rows from last frame, send off
         void Vanish(IEnumerable<RectangleF> rects, bool toTrash)
         {
+            if (toTrash) { VanishTo(rects, trashPt, true); return; }
+            VanishTo(rects, PointF.Empty, false, true);
+        }
+
+        void VanishTo(IEnumerable<RectangleF> rects, PointF targetCanvasPt, bool gulp)
+        {
+            VanishTo(rects, targetCanvasPt, gulp, false);
+        }
+
+        void VanishTo(IEnumerable<RectangleF> rects, PointF targetCanvasPt, bool gulp, bool scatter)
+        {
             if (Anim.Reduced || canvas == null) return;
             int i = 0;
             foreach (var r in rects)
@@ -67,7 +79,7 @@ namespace Tepi
                 }
                 flyerImages.Add(img);
                 var screen = new RectangleF(lastLeft + px.X, lastTop + px.Y, px.Width, px.Height);
-                if (toTrash) flyers.Add(new Flyer { Img = img, Src = new Rectangle(0, 0, px.Width, px.Height), From = screen, Suck = true, Delay = Math.Min(i, 8) * 0.045f });
+                if (!scatter) flyers.Add(new Flyer { Img = img, Src = new Rectangle(0, 0, px.Width, px.Height), From = screen, Target = targetCanvasPt, Suck = true, Gulp = gulp, Delay = Math.Min(i, 8) * 0.045f });
                 else Shatter(img, screen);
                 i++;
             }
@@ -109,7 +121,6 @@ namespace Tepi
             double t0 = (now - flyUtc).TotalSeconds;
             // Flyers live in screen px; canvas origin this frame
             int left = frameLeft, top = frameTop;
-            var trash = new PointF(lastLeft + trashPt.X * scale, lastTop + trashPt.Y * scale);
             bool alive = false, gulp = false;
             var st = g.Save();
             g.ResetTransform();
@@ -128,16 +139,17 @@ namespace Tepi
                     RectangleF dst;
                     if (f.Suck)
                     {
+                        var target = new PointF(lastLeft + f.Target.X * scale, lastTop + f.Target.Y * scale);
                         // Genie: width shrinks first, then height
                         float e = t * t * (3 - 2 * t);
                         float sx = 1 - 0.94f * Ease.OutCubic(Math.Min(1, t * 1.4f)), sy = 1 - 0.88f * e;
                         float fx = f.From.X + f.From.Width / 2, fy = f.From.Y + f.From.Height / 2;
-                        float ccx = fx, ccy = Math.Min(fy, trash.Y) - 30 * scale;
+                        float ccx = fx, ccy = Math.Min(fy, target.Y) - 30 * scale;
                         float u = 1 - e;
-                        float x = u * u * fx + 2 * u * e * ccx + e * e * trash.X, y = u * u * fy + 2 * u * e * ccy + e * e * trash.Y;
+                        float x = u * u * fx + 2 * u * e * ccx + e * e * target.X, y = u * u * fy + 2 * u * e * ccy + e * e * target.Y;
                         dst = new RectangleF(x - f.From.Width * sx / 2 - left, y - f.From.Height * sy / 2 - top, f.From.Width * sx, f.From.Height * sy);
                         alpha = 1 - Ease.Clamp01((t - 0.7f) / 0.3f);
-                        if (t > 0.82f) gulp = true;
+                        if (f.Gulp && t > 0.82f) gulp = true;
                     }
                     else
                     {

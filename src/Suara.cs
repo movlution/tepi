@@ -154,7 +154,7 @@ namespace Tepi
             {
                 var e = items[i];
                 float rowH = VoiceRowHeight(e, w);
-                float rowY = y;
+                float rowY = y + CollapseAt("voice", i);
                 y += rowH;
                 if (rowY + rowH < area.Top || rowY > area.Bottom) continue;
                 DrawVoiceRow(e, i, new RectangleF(area.X + 4, rowY + 2, area.Width - 8, rowH - 4), area);
@@ -195,13 +195,15 @@ namespace Tepi
                 var copy = new RectangleF(tx - 6, by, 70, 24);
                 var rm = new RectangleF(copy.Right + 6, by, 70, 24);
                 VoiceAction(copy, "voiceCopy" + i, Lang.T("Salin"), delegate { VoiceCopy(pick); });
-                VoiceAction(rm, "voiceRm" + i, Lang.T("Hapus"), delegate { VoiceDelete(pick, row); });
+                int delIdx = i;
+                VoiceAction(rm, "voiceRm" + i, Lang.T("Hapus"), delegate { VoiceDelete(pick, row, delIdx); });
                 p.TextRight(Fmt.Ago(e.Utc), Ink.Small(11f), p.T.Faint, row.Right - 14, by + 12);
             }
             if (!whole) return;
             AddHit(row, id, delegate { VoiceOpen(pick); }, null, delegate { VoiceMenu(pick); });
             // Added after the row: wins inside it
-            if (hover && !open) AddHit(del0, del, delegate { VoiceDelete(pick, row); });
+            int hoverIdx = i;
+            if (hover && !open) AddHit(del0, del, delegate { VoiceDelete(pick, row, hoverIdx); });
         }
 
         // Rows fly into this trash when cleared
@@ -249,7 +251,7 @@ namespace Tepi
         }
 
         // Log rows go; reminders cancel; transcripts to the Recycle Bin
-        void VoiceDelete(VoiceEntry e, RectangleF row)
+        void VoiceDelete(VoiceEntry e, RectangleF row, int idx)
         {
             if (e.Kind == "nanti") { CancelOneShot(e.Reminder); return; }
             if (e.Kind == "rapat")
@@ -260,6 +262,7 @@ namespace Tepi
             else voiceLog.Remove(e);
             if (ReferenceEquals(voiceOpen, e)) voiceOpen = null;
             Vanish(new[] { CanvasRect(row) }, false);
+            if (idx >= 0) Collapse("voice", idx, row.Height + 4);
             Kick();
         }
 
@@ -272,13 +275,13 @@ namespace Tepi
                 m.Items.Add(Lang.T("Buka"), null, delegate { VoiceOpen(e); });
                 m.Items.Add(Lang.T("Tampilkan di folder"), null, delegate { try { Process.Start("explorer.exe", "/select,\"" + e.Path + "\""); } catch (Exception) { } });
                 m.Items.Add(new ToolStripSeparator());
-                m.Items.Add(Lang.T("Pindahkan ke Recycle Bin"), null, delegate { VoiceDelete(e, RectangleF.Empty); });
+                m.Items.Add(Lang.T("Pindahkan ke Recycle Bin"), null, delegate { VoiceDelete(e, RectangleF.Empty, -1); });
             }
             else
             {
                 m.Items.Add(Lang.T("Salin"), null, delegate { VoiceCopy(e); });
                 m.Items.Add(new ToolStripSeparator());
-                m.Items.Add(Lang.T("Hapus dari daftar"), null, delegate { VoiceDelete(e, RectangleF.Empty); });
+                m.Items.Add(Lang.T("Hapus dari daftar"), null, delegate { VoiceDelete(e, RectangleF.Empty, -1); });
             }
             StyleMenu(m);
             m.Closed += delegate { BeginInvoke(new Action(m.Dispose)); };

@@ -245,8 +245,8 @@ namespace Tepi
             // still assigned to a hidden tab before its native handle is created.
             if (fText == null)
             {
-                fText = UiFont(14f); fSub = UiFont(12.5f); fSmall = UiFont(11.5f);
-                fBold = new Font(Ink.MenuFamily, 14f * s, FontStyle.Bold, GraphicsUnit.Pixel);
+                fText = UiFont(Ink.Body.Size); fSub = UiFont(Ink.Callout.Size); fSmall = UiFont(Ink.Caption.Size);
+                fBold = new Font(Ink.MenuFamily, Ink.Headline.Size * s, FontStyle.Bold, GraphicsUnit.Pixel);
             }
 
             int pad = (int)(16 * s), W = ClientSize.Width, H = ClientSize.Height;
@@ -311,7 +311,7 @@ namespace Tepi
             pinNote.Size = new Size(TextRenderer.MeasureText(Lang.T("Lepas sematan"), fSub).Width + (int)(32 * s), bottomRow);
             pinNote.Location = new Point(delNote.Left - gap - pinNote.Width, H - pad - bottomRow);
 
-            saveState.Font = fSmall; saveState.ForeColor = saveFailed ? Color.IndianRed : KitInk.Sub;
+            saveState.Font = fSmall; saveState.ForeColor = saveFailed ? Ink.Base.Negative : KitInk.Sub;
             saveState.SetBounds(ex + (int)(14*s), wellEditor.Bottom-(int)(22*s), wellEditor.Width-(int)(28*s), (int)(18*s));
             Invalidate(true);
         }
@@ -325,11 +325,11 @@ namespace Tepi
             if (fSub == null) return;
             if (Tab == 0)
             {
-                Well(g, wellAdd, 12 * s); Well(g, wellList, 14 * s);
+                Well(g, wellAdd, Ink.RadiusControl * s); Well(g, wellList, Ink.RadiusModule * s);
             }
             else
             {
-                Well(g, wellSearch, 12 * s); Well(g, wellNotes, 14 * s); Well(g, wellEditor, 14 * s);
+                Well(g, wellSearch, Ink.RadiusControl * s); Well(g, wellNotes, Ink.RadiusModule * s); Well(g, wellEditor, Ink.RadiusModule * s);
             }
         }
 
@@ -574,7 +574,7 @@ namespace Tepi
             using (var b = new SolidBrush(KitInk.Group)) g.FillRectangle(b, e.Bounds);
             var row = new RectangleF(e.Bounds.X + 2 * s, e.Bounds.Y + 2 * s, e.Bounds.Width - 4 * s, e.Bounds.Height - 4 * s);
             if ((e.State & DrawItemState.Selected) != 0)
-                using (var p = Ink.Round(row, 10 * s)) using (var b = new SolidBrush(KitInk.Hover)) g.FillPath(b, p);
+                using (var p = Ink.Round(row, Ink.RadiusControl * s)) using (var b = new SolidBrush(KitInk.Hover)) g.FillPath(b, p);
             // Check circle
             float d = 18 * s, cx = row.X + 10 * s, cy = row.Y + (row.Height - d) / 2;
             var circle = new RectangleF(cx, cy, d, d);
@@ -598,7 +598,7 @@ namespace Tepi
                 bool late = !t.Done && t.Due.Value < DateTime.Now;
                 string ds = DueText(t.Due.Value);
                 int w = TextRenderer.MeasureText(ds, fSmall).Width + (int)(8 * s);
-                KitInk.Draw(g, ds, fSmall, late ? Color.FromArgb(224, 96, 84) : KitInk.Sub, new RectangleF(right - w, row.Y, w, row.Height), ContentAlignment.MiddleRight);
+                KitInk.Draw(g, ds, fSmall, late ? Ink.Base.Negative : KitInk.Sub, new RectangleF(right - w, row.Y, w, row.Height), ContentAlignment.MiddleRight);
                 right -= w + 8 * s;
             }
             // Title
@@ -670,7 +670,7 @@ namespace Tepi
         {
             saveState.Text = text;
             saveState.Visible = !string.IsNullOrEmpty(text) && Tab == 1;
-            saveState.ForeColor = saveFailed ? Color.IndianRed : KitInk.Sub;
+            saveState.ForeColor = saveFailed ? Ink.Base.Negative : KitInk.Sub;
         }
 
         bool SaveCurrent() { return SaveCurrent(true); }
@@ -754,7 +754,7 @@ namespace Tepi
             using (var b = new SolidBrush(KitInk.Group)) g.FillRectangle(b, e.Bounds);
             var row = new RectangleF(e.Bounds.X + 2 * s, e.Bounds.Y + 2 * s, e.Bounds.Width - 4 * s, e.Bounds.Height - 4 * s);
             if ((e.State & DrawItemState.Selected) != 0)
-                using (var p = Ink.Round(row, 10 * s)) using (var b = new SolidBrush(KitInk.Hover)) g.FillPath(b, p);
+                using (var p = Ink.Round(row, Ink.RadiusControl * s)) using (var b = new SolidBrush(KitInk.Hover)) g.FillPath(b, p);
             float x = row.X + 12 * s, w = row.Width - 24 * s;
             if (n.Pin)
             {

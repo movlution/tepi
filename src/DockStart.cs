@@ -490,9 +490,11 @@ namespace Tepi
                     var t = tiles[i];
                     var r = new RectangleF(t.Rect.X, t.Rect.Y + BodyTop - scroll, t.Rect.Width, t.Rect.Height);
                     if (r.Bottom < BodyTop || r.Top > H - Foot) continue;
-                    hits.Add(new KeyValuePair<RectangleF, string>(r, "t" + i));
+                    string id = "t" + i;
+                    hits.Add(new KeyValuePair<RectangleF, string>(r, id));
                     bool on = hot == i || (hot < 0 && sel == i);
-                    if (on) p.FillRound(Inset(r, 3), 12, pressId == "t" + i ? p.T.FillPressed : hot == i ? p.T.FillHover : p.T.Fill);
+                    var sq = Squish(id, r, t.Row ? 0.03f : 0.06f);
+                    if (on) p.FillRound(Inset(r, 3), 12, pressId == id ? p.T.FillPressed : hot == i ? p.T.FillHover : p.T.Fill);
                     var icon = IconOf(t.Entry);
                     if (t.Row)
                     {
@@ -507,6 +509,7 @@ namespace Tepi
                         if (icon != null) g.DrawImage(icon, ir); else p.FillRound(ir, 10, p.T.Fill);
                         p.Text(t.Entry.Name, Ink.Small(11.5f), p.T.Text, r.X + CellW / 2, r.Y + 68, CellW - 10, StringAlignment.Center);
                     }
+                    Unsquish(r, sq);
                 }
                 g.Restore(st);
                 if (contentH > ViewH)
@@ -529,6 +532,7 @@ namespace Tepi
                 // Who is signed in; their menu has account and session actions
                 var me = new RectangleF(Pad - 6, cy - 21, Math.Min(280, p.Measure(userName, Ink.Semi(13f)) + 70), 42);
                 hits.Add(new KeyValuePair<RectangleF, string>(me, "me"));
+                var meSq = Squish("me", me, 0.04f);
                 if (hotId == "me") p.FillRound(me, 12, p.T.FillHover);
                 var face = new RectangleF(me.X + 8, cy - 16, 32, 32);
                 if (avatar != null)
@@ -546,22 +550,29 @@ namespace Tepi
                     p.Icon((char)0xE77B, 14f, p.T.Sub, face.X + 16, cy);
                 }
                 p.Text(userName, Ink.Semi(13f), p.T.Text, face.Right + 12, cy, me.Right - face.Right - 18, StringAlignment.Near);
+                Unsquish(me, meSq);
                 if (query.Trim().Length > 0)
                 {
                     var files = new RectangleF(me.Right + 8, cy - 16, 210, 32);
                     hits.Add(new KeyValuePair<RectangleF, string>(files, "files"));
+                    var fSq = Squish("files", files, 0.05f);
                     if (hotId == "files") p.FillRound(files, 10, p.T.FillHover);
                     p.Icon((char)0xE8B7, 13f, p.T.Sub, files.X + 16, cy);
                     p.Text(Lang.F("Cari \"{0}\" di berkas", query.Trim()), Ink.Small(12f), p.T.Text, files.X + 32, cy, files.Width - 38, StringAlignment.Near);
+                    Unsquish(files, fSq);
                 }
                 var power = new RectangleF(W - Pad - 34, cy - 19, 38, 38);
                 var gear = new RectangleF(power.X - 42, cy - 19, 38, 38);
                 hits.Add(new KeyValuePair<RectangleF, string>(gear, "gear"));
                 hits.Add(new KeyValuePair<RectangleF, string>(power, "power"));
+                var gSq = Squish("gear", gear, 0.08f);
                 if (hotId == "gear") p.FillRound(gear, 10, p.T.FillHover);
-                if (hotId == "power") p.FillRound(power, 10, p.T.FillHover);
                 p.Icon((char)0xE713, 15f, hotId == "gear" ? p.T.Text : p.T.Sub, gear.X + 19, cy);
+                Unsquish(gear, gSq);
+                var pSq = Squish("power", power, 0.08f);
+                if (hotId == "power") p.FillRound(power, 10, p.T.FillHover);
                 p.Icon((char)0xE7E8, 15f, hotId == "power" ? p.T.Text : p.T.Sub, power.X + 19, cy);
+                Unsquish(power, pSq);
                 if (hotId == "gear") Tip(gear, Lang.T("Pengaturan Windows"));
                 if (hotId == "power") Tip(power, Lang.T("Daya"));
             }
@@ -684,6 +695,7 @@ namespace Tepi
                 if (e.Uri == SettingsPages.TepiPrefs) { Done(); isle.OpenPrefs(); return; }
                 if (e.Uri.Length > 0) Open(e.Uri, null);
                 else ShellApp.Launch(e.Target, admin);
+                dock.PulseLaunchedApp(DockTarget(e), e.Id);
                 Done();
             }
 
@@ -715,7 +727,12 @@ namespace Tepi
                 bool pinned = targets.Exists(x => string.Equals(x, e.Target, StringComparison.OrdinalIgnoreCase));
                 if (pinned)
                 {
-                    m.Items.Add(Lang.T("Lepas dari Start"), null, delegate { targets.RemoveAll(x => string.Equals(x, e.Target, StringComparison.OrdinalIgnoreCase)); SavePins(targets); });
+                    m.Items.Add(Lang.T("Lepas dari Start"), null, delegate
+                    {
+                        VanishRect(new RectangleF(t.Rect.X, t.Rect.Y + BodyTop - scroll, t.Rect.Width, t.Rect.Height));
+                        targets.RemoveAll(x => string.Equals(x, e.Target, StringComparison.OrdinalIgnoreCase));
+                        SavePins(targets);
+                    });
                     if (t.Pin) m.Items.Add(Lang.T("Pindah ke depan"), null, delegate { targets.RemoveAll(x => string.Equals(x, e.Target, StringComparison.OrdinalIgnoreCase)); targets.Insert(0, e.Target); SavePins(targets); });
                 }
                 else m.Items.Add(Lang.T("Sematkan ke Start"), null, delegate { targets.Add(e.Target); SavePins(targets); });

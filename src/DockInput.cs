@@ -189,6 +189,9 @@ namespace Tepi
                 var next = at >= 0 && a.Wins.Count > 1 ? a.Wins[(at + 1) % a.Wins.Count] : at >= 0 ? a.Wins[at] : a.Recent();
                 if (next != null)
                 {
+                    a.PulseUtc = DateTime.UtcNow;
+                    a.Grow.Velocity += 2.2f;
+                    Animate();
                     // An elevated window ignores us; only the app itself can raise it again
                     bool stuck = ShellApp.OutOfReach(next.H);
                     if (stuck) ShellApp.Relaunch(next.H);
@@ -203,7 +206,7 @@ namespace Tepi
                 if (target.Length == 0) return;
                 ShellApp.Launch(target, admin);
                 a.LaunchUtc = DateTime.UtcNow;
-                if (a.Hop < 0) { a.Hop = 0; a.Hops = 1; }
+                if (a.Hop < 0) { a.Hop = 0; a.Hops = Anim.Reduced ? 1 : 2; }
                 Animate();
             }
 
@@ -313,6 +316,12 @@ namespace Tepi
 
             void Unpin(DockApp a)
             {
+                if (!a.Running)
+                {
+                    var s = slots.Find(x => x.App == a);
+                    if (s != null) ShatterDockIcon(a, Glyph(s.Icon));
+                    Animate();
+                }
                 var pins = isle.DockPins();
                 pins.RemoveAll(x => string.Equals(x, a.Target, StringComparison.OrdinalIgnoreCase));
                 isle.SetDockPins(pins);
@@ -675,6 +684,8 @@ namespace Tepi
                 if (a == null) return;
                 if (dragOut)
                 {
+                    float size = iconSize * 1.12f;
+                    ShatterDockIcon(a, Glyph(new RectangleF(mouseX - dragGrab.X - size / 2, mouseY - dragGrab.Y - size / 2, size, size)));
                     if (a.Pinned) Unpin(a);
                     a.Show.Snap(0);
                     Refresh(false);

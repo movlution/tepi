@@ -13,6 +13,8 @@ namespace Tepi
         const int MiniHotkey = 11;
         // Sliver sizes at 1x: rest, busy
         const float MiniW = 56, MiniH = 6, MiniBusyW = 64, MiniBusyH = 8;
+        // Indicator dot radius (area >= 19.6 px^2) and progress track thickness
+        const float MiniDotR = 2.5f, MiniTrackThick = 4f;
         // Eyes sliver: height, widths, eye scale, x
         const float MiniEyesH = 14, MiniEyesW = 40, MiniEyesDotW = 52, MiniEyesBusyW = 76, MiniEyeK = 0.6f, MiniEyeX = 18;
         // Clock sliver: height, width, text size
@@ -387,16 +389,16 @@ namespace Tepi
             {
                 float cx = v != View.Idle ? w / 2 - 12 : w / 2;
                 clockRoller.Draw(p, Ink.Semi(MiniClockText), p.T.Text, cx, h / 2, StringAlignment.Center, now);
-                if (dot) p.Circle(w - 9, h / 2, 1.7f, MicSilenced || RapatOn ? p.T.Negative : p.T.Accent);
+                if (dot) p.Circle(w - 9, h / 2, MiniDotR, MicSilenced || RapatOn ? p.T.Negative : p.T.Accent);
                 if (LockShown) p.Symbol(Sym.ChevronUp, 10, h / 2, 6.5f, p.T.Text);
                 return;
             }
             if (EyesOn) { MiniFace(w, h, now, v, dot); return; }
             bool caps = LockShown;
             if (v == View.Idle && !dot && !caps) return;
-            float cy = h / 2, right = dot ? w - 15 : w - 12, left = caps ? 15 : 12;
+            float cy = h / 2, right = dot ? w - 16 : w - 12, left = caps ? 15 : 12;
             // Recording: accent dot at the end
-            if (dot) p.Circle(w - 9, cy, 1.7f, MicSilenced || RapatOn ? p.T.Negative : p.T.Accent);
+            if (dot) p.Circle(w - 9, cy, MiniDotR, MicSilenced || RapatOn ? p.T.Negative : p.T.Accent);
             // Lock keys: a caps arrow at the start
             if (caps) p.Symbol(Sym.ChevronUp, 10, cy, 6.5f, p.T.Text);
             if (v == View.Idle) return;
@@ -404,12 +406,12 @@ namespace Tepi
             {
                 // Upright sliver: progress fills downward
                 float f = MiniFraction(now), cx = w / 2;
-                var track = new RectangleF(cx - 1, 8, 2, h - 16);
-                p.FillRound(track, 1, p.T.Quaternary);
-                if (f > 0.001f) p.FillRound(new RectangleF(track.X, track.Y, 2, Math.Max(2, track.Height * f)), 1, p.T.Accent);
+                var track = new RectangleF(cx - MiniTrackThick / 2, 8, MiniTrackThick, h - 16);
+                p.FillRound(track, MiniTrackThick / 2, p.T.Faint);
+                if (f > 0.001f) p.FillRound(new RectangleF(track.X, track.Y, MiniTrackThick, Math.Max(MiniTrackThick, track.Height * f)), MiniTrackThick / 2, p.T.Accent);
                 return;
             }
-            MiniLine(new RectangleF(left, cy - 1, right - left, 2), v, now);
+            MiniLine(new RectangleF(left, cy - MiniTrackThick / 2, right - left, MiniTrackThick), v, now);
         }
 
         void MiniLine(RectangleF r, View v, DateTime now)
@@ -430,7 +432,7 @@ namespace Tepi
             float cy = h / 2;
             DrawEyes(w / 2, cy, MiniEyeK);
             // Same dots as the plain sliver
-            if (dot) p.Circle(w - 9, cy, 1.7f, MicSilenced || RapatOn ? p.T.Negative : p.T.Accent);
+            if (dot) p.Circle(w - 9, cy, MiniDotR, MicSilenced || RapatOn ? p.T.Negative : p.T.Accent);
             if (LockShown) p.Symbol(Sym.ChevronUp, 10, cy, 6.5f, p.T.Text);
         }
 
@@ -473,7 +475,7 @@ namespace Tepi
 
         void Hair(RectangleF r, float f, Color c)
         {
-            p.FillRound(r, r.Height / 2, p.T.Quaternary);
+            p.FillRound(r, r.Height / 2, p.T.Faint);
             if (f > 0.001f) p.FillRound(r, r.Height / 2, p.Split(r.X, r.Width, r.X + Math.Max(r.Height, r.Width * f), c, Color.Transparent));
         }
 
@@ -482,7 +484,7 @@ namespace Tepi
         {
             double t = (now - DateTime.MinValue).TotalSeconds % 2.4 / 2.4;
             float k = 0.5f - 0.5f * (float)Math.Cos(t * Math.PI * 2);
-            p.FillRound(r, r.Height / 2, Ink.A(p.T.Text, 0.22f + 0.4f * k));
+            p.FillRound(r, r.Height / 2, Ink.A(p.T.Text, 0.38f + 0.32f * k));
         }
     }
 }

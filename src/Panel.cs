@@ -9,33 +9,18 @@ namespace Tepi
 {
     partial class Island
     {
-        // Empty state; returns button top
+        // Empty state backward compatibility wrapper delegating to Parts.EmptyState
         float Empty(float w, char glyph, string title, string detail)
         {
-            float top = PanelTop + 20;
-            p.Icon(glyph, 20f, p.T.Sub, w / 2, top + 12);
-            p.TextCenter(title, Ink.Semi(15f), p.T.Text, w / 2, top + 44);
-            p.TextBox(detail, Ink.Text(12.5f), p.T.Sub, new RectangleF(48, top + 58, w - 96, 38), StringAlignment.Center);
-            return top + 104;
+            var area = new RectangleF(0, PanelTop, w, PanelHeight() - PanelTop - 10);
+            EmptyState(area, glyph, title, detail);
+            return area.Y + Math.Max(8, (area.Height - 108) / 2) + 108;
         }
 
+        // Backward compatibility wrapper delegating to Parts.Pill
         void Button(RectangleF r, string id, string label, bool filled, Action act)
         {
-            bool hover = Hover(id), down = Pressed(id);
-            AddHit(r, id, act);
-            // Held: the button sinks a little
-            if (down) r.Inflate(-1.5f, -1.5f);
-            if (filled)
-            {
-                p.FillRound(r, 10, down ? Ink.A(p.T.Text, 0.68f) : hover ? Ink.A(p.T.Text, 0.82f) : p.T.Text);
-                p.TextCenter(label, Ink.Semi(13f), p.T.Bg, r.X + r.Width / 2, r.Y + r.Height / 2);
-            }
-            else
-            {
-                if (hover) p.FillRound(r, 10, down ? p.T.FillHover : p.T.Fill);
-                p.StrokeRound(r, 10, p.T.Sub, 1.2f);
-                p.TextCenter(label, Ink.Semi(13f), p.T.Text, r.X + r.Width / 2, r.Y + r.Height / 2);
-            }
+            Pill(r, id, label, filled ? PillKind.Primary : PillKind.Secondary, act);
         }
 
         // Music
@@ -186,7 +171,7 @@ namespace Tepi
         {
             if (hub != null && hub.Error != null)
             {
-                Empty(w, Ink.IcoTerminal, Lang.T("Server hook mati"), hub.Error + Lang.T(" · agent.port di settings.ini"));
+                EmptyState(new RectangleF(0, PanelTop, w, h - PanelTop), Ink.IcoTerminal, Lang.T("Server hook mati"), hub.Error + Lang.T(" · agent.port di settings.ini"));
                 return;
             }
             float qh = DrawQuotaBlock(w, PanelTop + 2);
@@ -195,7 +180,7 @@ namespace Tepi
             {
                 var keep = g.Save();
                 g.TranslateTransform(0, Math.Max(0, qh - 8));
-                Empty(w, Ink.IcoTerminal, Lang.T("Belum ada sesi agen"), linked.Length > 0 ? Lang.T("Terhubung: ") + linked : Lang.T("Belum terhubung · tray > Hubungkan agen"));
+                EmptyState(new RectangleF(0, PanelTop, w, h - PanelTop - Math.Max(0, qh - 8)), Ink.IcoTerminal, Lang.T("Belum ada sesi agen"), linked.Length > 0 ? Lang.T("Terhubung: ") + linked : Lang.T("Belum terhubung · tray > Hubungkan agen"));
                 g.Restore(keep);
                 return;
             }
@@ -225,15 +210,15 @@ namespace Tepi
             string rowId = "agent" + s.Id;
             var session = s;
             AddHit(row, rowId, delegate { if (!FocusTerminal(session)) ShowInfo(Ink.IcoTerminal, Lang.T("Terminal tidak ditemukan"), session.Project, true); });
-            if (Hover(rowId)) p.FillRound(row, 16, Pressed(rowId) ? p.T.FillHover : p.T.Fill);
+            if (Hover(rowId)) p.FillRound(row, Ink.RadiusControl, Pressed(rowId) ? p.T.FillPressed : p.T.FillHover);
             // Just jumped here: an accent wash that fades
             float lit = s.Id == agentFocus ? 1 - (float)((DateTime.UtcNow - agentFocusUtc).TotalSeconds / 1.6) : 0;
-            if (lit > 0) p.FillRound(row, 16, Ink.A(p.T.Accent, 0.16f * lit));
+            if (lit > 0) p.FillRound(row, Ink.RadiusControl, Ink.A(p.T.Accent, 0.16f * lit));
             DrawStateMark(s, 36, cy);
-            var semi = Ink.Semi(13.5f);
+            var semi = Ink.Headline;
             p.Text(s.Project, semi, p.T.Text, 60, cy - 10, 220, StringAlignment.Near);
             float px = 60 + Math.Min(220, p.Measure(s.Project, semi)) + 8;
-            p.Text(AgentTag(s), Ink.Small(11f), p.T.Sub, px, cy - 9.5f, 160, StringAlignment.Near);
+            p.Text(AgentTag(s), Ink.Caption, p.T.Sub, px, cy - 9.5f, 160, StringAlignment.Near);
             // Hover offers prompt box for live sessions
             string sendId = "send" + s.Id;
             if ((Hover(rowId) || Hover(sendId)) && s.State != AgentState.Ended && s.Window != IntPtr.Zero)
@@ -241,16 +226,16 @@ namespace Tepi
                 var send = new RectangleF(w - 26 - 58, cy - 21, 58, 22);
                 AddHit(send, sendId, delegate { AskAgent(session); });
                 p.FillRound(send, 11, Hover(sendId) ? p.T.Text : p.T.Accent);
-                p.TextCenter(Lang.T("Chat"), Ink.Semi(10.5f), Hover(sendId) ? p.T.Bg : p.T.OnAccent, send.X + send.Width / 2, send.Y + 11);
+                p.TextCenter(Lang.T("Chat"), Ink.Caption, Hover(sendId) ? p.T.Bg : p.T.OnAccent, send.X + send.Width / 2, send.Y + 11);
             }
             else
             {
                 // Working time ticks alone, once a second
                 LiveRect(new RectangleF(w - 186, cy - 18, 160, 16), s.State == AgentState.Working ? TickFps : 0, () => StateWord(session).GetHashCode(),
-                         t => p.TextRight(StateWord(session), Ink.Small(11f), p.T.Sub, w - 26, cy - 10));
+                         t => p.TextRight(StateWord(session), Ink.Caption, p.T.Sub, w - 26, cy - 10));
             }
             string meta = Summary(s, DateTime.UtcNow);
-            var mf = Ink.Small(11f);
+            var mf = Ink.Caption;
             float lineW = w - 60 - 26 - p.Measure(meta, mf) - 14;
             p.TextRight(meta, mf, p.T.Faint, w - 26, cy + 10);
             string now = PlanNow(s);
@@ -314,8 +299,7 @@ namespace Tepi
             }
             if (state == DataState.Failed)
             {
-                float ry = Empty(w, Ink.IcoCalendar, Lang.T("Tugas gagal dimuat"), taskNote);
-                Button(new RectangleF(w / 2 - 60, ry, 120, 34), "retry", Lang.T("Coba lagi"), false, delegate { RefreshAll(1); });
+                EmptyState(new RectangleF(0, PanelTop, w, h - PanelTop), Ink.IcoCalendar, Lang.T("Tugas gagal dimuat"), taskNote, Lang.T("Coba lagi"), "retry", delegate { RefreshAll(1); }, PillKind.Secondary);
                 return;
             }
             if (state == DataState.Loading)
@@ -323,51 +307,54 @@ namespace Tepi
                 float cy = PanelTop + (h - PanelTop) / 2 - 6;
                 // Spinner and line centred as one
                 string loading = OnlyKuliaTasks ? Lang.T("Memuat tugas dari Kulia…") : Lang.T("Memuat tugas…");
-                float lx = w / 2 - (p.Measure(loading, Ink.Text(13f)) + 24) / 2;
+                float lx = w / 2 - (p.Measure(loading, Ink.Body) + 24) / 2;
                 p.Orbit(lx + 7, cy, 7f, orbitPhase, p.T.Sub);
-                p.Text(loading, Ink.Text(13f), p.T.Sub, lx + 24, cy, w - lx - 40, StringAlignment.Near);
+                p.Text(loading, Ink.Body, p.T.Sub, lx + 24, cy, w - lx - 40, StringAlignment.Near);
                 return;
             }
             if (state == DataState.Empty)
             {
-                Empty(w, Ink.IcoCalendar, Lang.T("Tidak ada tugas aktif"), taskNote ?? (OnlyKuliaTasks ? Lang.T("Diperbarui tiap 10 menit") : Lang.T("Diperbarui tiap 15 menit")));
+                EmptyState(new RectangleF(0, PanelTop, w, h - PanelTop), Ink.IcoCalendar, Lang.T("Tidak ada tugas aktif"), taskNote ?? (OnlyKuliaTasks ? Lang.T("Diperbarui tiap 10 menit") : Lang.T("Diperbarui tiap 15 menit")));
                 return;
             }
             // Partial failure: one quiet line below
             float foot = TaskFoot();
-            if (foot > 0) p.Text(taskNote, Ink.Small(11f), p.T.Sub, 26, h - 18, w - 52, StringAlignment.Near);
+            if (foot > 0) p.Text(taskNote, Ink.Caption, p.T.Sub, 26, h - 18, w - 52, StringAlignment.Near);
 
             const float rowH = 54;
             var area = new RectangleF(10, PanelTop + 2, w - 20, h - PanelTop - 12 - foot);
             var st = g.Save();
             g.IntersectClip(area);
             var nowUtc = DateTime.UtcNow;
+            float keep = p.Alpha;
             for (int i = 0; i < tasks.Count; i++)
             {
                 var t = tasks[i];
-                float y = area.Y + i * rowH - taskScroll.Value;
+                float dy, a = RowIn(i, nowUtc, out dy);
+                float y = area.Y + i * rowH - taskScroll.Value + CollapseAt("task", i) + dy;
                 if (y + rowH < area.Top || y > area.Bottom) continue;
+                p.Alpha = keep * a;
                 var row = new RectangleF(14, y + 2, w - 28, rowH - 4);
                 string rowId = "task" + t.Id, doneId = "taskDone" + t.Id;
                 bool hover = Hover(rowId) || Hover(doneId);
-                if (hover) p.FillRound(row, 14, p.T.Fill);
+                if (hover) p.FillRound(row, Ink.RadiusControl, p.T.Fill);
                 float cy = row.Y + row.Height / 2;
                 var local = t.DeadlineUtc.ToLocalTime();
-                p.TextCenter(local.Day.ToString(), Ink.Display(17f), p.T.Text, 44, cy - 8);
-                p.TextCenter(local.ToString("MMM", Fmt.Id), Ink.Small(10.5f), p.T.Sub, 44, cy + 10);
+                p.TextCenter(local.Day.ToString(), Ink.Title2, p.T.Text, 44, cy - 8);
+                p.TextCenter(local.ToString("MMM", Fmt.Id), Ink.Caption, p.T.Sub, 44, cy + 10);
                 float tx = 74, right = row.Right - 12;
                 var left = t.DeadlineUtc - nowUtc;
                 string when = Relative(t, nowUtc);
                 bool urgent = left.TotalHours < 24;
-                var wf = Ink.Semi(11.5f);
+                var wf = Ink.Caption;
                 float ww = p.Measure(when, wf) + (urgent ? 18 : 0);
                 var btn = new RectangleF(right - 116, cy - 15, 116, 30);
                 // Read-only sources keep the date
                 if (hover && !t.ReadOnly)
                 {
-                    if (Hover(doneId)) p.FillRound(btn, 10, p.T.FillHover);
-                    p.StrokeRound(btn, 10, p.T.Sub, 1.2f);
-                    p.TextCenter(Lang.T("Tandai selesai"), Ink.Semi(12f), p.T.Text, btn.X + btn.Width / 2, cy);
+                    if (Hover(doneId)) p.FillRound(btn, Ink.RadiusControl, p.T.FillHover);
+                    p.StrokeRound(btn, Ink.RadiusControl, p.T.Sub, 1.2f);
+                    p.TextCenter(Lang.T("Tandai selesai"), Ink.Callout, p.T.Text, btn.X + btn.Width / 2, cy);
                     ww = 116;
                 }
                 else if (urgent)
@@ -381,13 +368,21 @@ namespace Tepi
                 string course = t.Course + (t.Kind == "ujian" ? Lang.T(" · ujian") : "") + (t.Status == "proses" ? Lang.T(" · dikerjakan") : "");
                 string from = SourceHub.TaskLabel(t.Source);
                 if (from.Length > 0 && from != t.Course) course = course.Length > 0 ? from + " · " + course : from;
-                p.Text(course, Ink.Small(11f), p.T.Sub, tx, cy - 10, right - ww - tx - 12, StringAlignment.Near);
-                p.Text(t.Title, Ink.Semi(13f), p.T.Text, tx, cy + 9, right - ww - tx - 12, StringAlignment.Near);
+                p.Text(course, Ink.Caption, p.T.Sub, tx, cy - 10, right - ww - tx - 12, StringAlignment.Near);
+                p.Text(t.Title, Ink.Headline, p.T.Text, tx, cy + 9, right - ww - tx - 12, StringAlignment.Near);
                 string url = t.Url;
                 AddHit(row, rowId, delegate { OpenUrl(url); });
                 var task = t;
-                if (!t.ReadOnly) AddHit(btn, doneId, delegate { MarkDone(task); });
+                int idx = i;
+                var taskRow = row;
+                if (!t.ReadOnly) AddHit(btn, doneId, delegate
+                {
+                    Vanish(new[] { CanvasRect(taskRow) }, false);
+                    Collapse("task", idx, rowH);
+                    MarkDone(task);
+                });
             }
+            p.Alpha = keep;
             g.Restore(st);
         }
 
@@ -407,20 +402,19 @@ namespace Tepi
 
         // Messages
 
-        void DrawMessagesPage(float w, float h)
+        void DrawMessagesPage(float w, float h, DateTime now)
         {
             if (!NotifOn)
             {
-                Empty(w, Ink.IcoBell, Lang.T("Notifikasi pesan dimatikan"), Lang.T("Saklarnya ada di menu klik kanan"));
+                EmptyState(new RectangleF(0, PanelTop, w, h - PanelTop), Ink.IcoBell, Lang.T("Notifikasi pesan dimatikan"), Lang.T("Saklarnya ada di menu klik kanan"));
                 return;
             }
             if (notifAccess != Windows.UI.Notifications.Management.UserNotificationListenerAccessStatus.Allowed)
             {
-                float ny = Empty(w, Ink.IcoLock, Lang.T("Akses notifikasi ditolak"), Lang.T("Pengaturan Windows > Privasi > Notifikasi"));
-                Button(new RectangleF(w / 2 - 80, ny, 160, 34), "notifPerm", Lang.T("Buka pengaturan"), false, delegate
+                EmptyState(new RectangleF(0, PanelTop, w, h - PanelTop), Ink.IcoLock, Lang.T("Akses notifikasi ditolak"), Lang.T("Pengaturan Windows > Privasi > Notifikasi"), Lang.T("Buka pengaturan"), "notifPerm", delegate
                 {
                     try { Process.Start("ms-settings:privacy-notifications"); } catch (Exception ex) { Log.Write("settings: " + ex.Message); }
-                });
+                }, PillKind.Secondary);
                 return;
             }
             if (notifs.Count == 0)
@@ -428,44 +422,54 @@ namespace Tepi
                 // A read failure is not an empty inbox; never claim "no messages" for it
                 if (notifWatcher.Failing)
                 {
-                    float fy = Empty(w, Ink.IcoBell, Lang.T("Pesan tidak bisa dibaca"), Lang.T("Notifikasi Windows tidak menjawab. Tepi mencoba lagi otomatis."));
-                    Button(new RectangleF(w / 2 - 80, fy, 160, 34), "notifRetry", Lang.T("Coba lagi"), false, delegate { notifWatcher.Refresh(); });
+                    EmptyState(new RectangleF(0, PanelTop, w, h - PanelTop), Ink.IcoBell, Lang.T("Pesan tidak bisa dibaca"), Lang.T("Notifikasi Windows tidak menjawab. Tepi mencoba lagi otomatis."), Lang.T("Coba lagi"), "notifRetry", delegate { notifWatcher.Refresh(); }, PillKind.Secondary);
                     return;
                 }
-                Empty(w, Ink.IcoBell, Lang.T("Belum ada pesan"), Lang.T("WhatsApp, Telegram, Discord, Teams, email"));
+                EmptyState(new RectangleF(0, PanelTop, w, h - PanelTop), Ink.IcoBell, Lang.T("Belum ada pesan"), Lang.T("WhatsApp, Telegram, Discord, Teams, email"));
                 return;
             }
             const float rowH = 50;
             var area = new RectangleF(10, PanelTop + 2, w - 20, h - PanelTop - 12);
             var st = g.Save();
             g.IntersectClip(area);
+            float keep = p.Alpha;
             for (int i = 0; i < notifs.Count; i++)
             {
                 var item = notifs[i];
-                float y = area.Y + i * rowH - notifScroll.Value;
+                float dy, a = RowIn(i, now, out dy);
+                float y = area.Y + i * rowH - notifScroll.Value + CollapseAt("notif", i) + dy;
                 if (y + rowH < area.Top || y > area.Bottom) continue;
+                p.Alpha = keep * a;
                 var row = new RectangleF(14, y + 2, w - 28, rowH - 4);
                 string id = "notif" + item.Id, del = "notifDel" + item.Id;
                 bool hover = Hover(id) || Hover(del);
-                if (hover) p.FillRound(row, 14, p.T.Fill);
+                if (hover) p.FillRound(row, Ink.RadiusControl, p.T.Fill);
                 float cy = row.Y + row.Height / 2;
                 DrawAppBadge(item, new RectangleF(row.X + 8, cy - 16, 32, 32));
                 float tx = row.X + 50;
-                p.Text(NotifTitle(item), Ink.Semi(12.5f), p.T.Text, tx, cy - 9, row.Right - tx - 80, StringAlignment.Near);
-                p.Text(NotifBody(item), Ink.Text(11.5f), p.T.Sub, tx, cy + 9, row.Right - tx - 44, StringAlignment.Near);
+                p.Text(NotifTitle(item), Ink.Callout, p.T.Text, tx, cy - 9, row.Right - tx - 80, StringAlignment.Near);
+                p.Text(NotifBody(item), Ink.Caption, p.T.Sub, tx, cy + 9, row.Right - tx - 44, StringAlignment.Near);
                 var x = new RectangleF(row.Right - 36, cy - 14, 28, 28);
                 if (hover)
                 {
                     p.Circle(x.X + 14, x.Y + 14, 12, Hover(del) ? p.T.FillHover : p.T.Fill);
                     p.Cross(x.X + 14, x.Y + 14, 10, p.T.Sub);
                 }
-                else p.TextRight(Fmt.Ago(item.Time), Ink.Small(11f), p.T.Sub, row.Right - 12, cy - 9);
+                else p.TextRight(Fmt.Ago(item.Time), Ink.Caption, p.T.Sub, row.Right - 12, cy - 9);
                 var open = item;
                 AddHit(row, id, delegate { OpenNotifApp(open); });
                 // Added last: wins over the row
                 var victim = item;
-                AddHit(x, del, delegate { RemoveNotifs(new List<NotifItem> { victim }); });
+                int idx = i;
+                var victimRow = row;
+                AddHit(x, del, delegate
+                {
+                    Vanish(new[] { CanvasRect(victimRow) }, false);
+                    Collapse("notif", idx, rowH);
+                    RemoveNotifs(new List<NotifItem> { victim });
+                });
             }
+            p.Alpha = keep;
             g.Restore(st);
         }
     }

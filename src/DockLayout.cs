@@ -265,13 +265,75 @@ namespace Tepi
                 return w;
             }
 
-            // One small hop when launching; a few when an app calls for you
-            static float HopLift(DockApp a)
+            // Two-bounce elastic hop on launch; quick micro-hop on click pulse; squash & stretch + gulp swell
+            static float HopLift(DockApp a) { return HopLift(a, DateTime.UtcNow); }
+
+            static float HopLift(DockApp a, DateTime now)
             {
-                if (a.Hop < 0) return 0;
-                float t = a.Hop / HopSecs;
-                float height = a.Attention ? 0.8f : 0.6f;
-                return Hop * height * (float)Math.Sin(Math.PI * Ease.Clamp01(t));
+                if (a.Hop >= 0)
+                {
+                    float t = a.Hop / HopSecs;
+                    bool launching = a.LaunchUtc > DateTime.MinValue && (now - a.LaunchUtc).TotalSeconds < 1.2;
+                    float height = launching ? (a.Hops >= 2 ? 0.92f : 0.44f) : (a.Attention ? 0.8f : 0.6f);
+                    return Hop * height * (float)Math.Sin(Math.PI * Ease.Clamp01(t));
+                }
+                if (a.PulseUtc > DateTime.MinValue && !Anim.Reduced)
+                {
+                    double pt = (now - a.PulseUtc).TotalSeconds;
+                    if (pt >= 0 && pt < 0.34) return Hop * 0.28f * (float)Math.Sin(Math.PI * Ease.OutCubic((float)(pt / 0.34)));
+                }
+                return 0;
+            }
+
+            static void HopScale(DockApp a, DateTime now, out float sx, out float sy)
+            {
+                sx = 1;
+                sy = 1;
+                if (Anim.Reduced) return;
+                if (a.Hop >= 0)
+                {
+                    float t = Ease.Clamp01(a.Hop / HopSecs);
+                    if (t < 0.16f)
+                    {
+                        float k = (float)Math.Sin(Math.PI * t / 0.16f);
+                        sx = 1 + 0.14f * k;
+                        sy = 1 - 0.14f * k;
+                    }
+                    else if (t > 0.84f)
+                    {
+                        float k = (float)Math.Sin(Math.PI * (t - 0.84f) / 0.16f);
+                        sx = 1 + 0.12f * k;
+                        sy = 1 - 0.11f * k;
+                    }
+                    else
+                    {
+                        float k = (float)Math.Sin(Math.PI * (t - 0.16f) / 0.68f);
+                        sx = 1 - 0.06f * k;
+                        sy = 1 + 0.08f * k;
+                    }
+                }
+                else if (a.PulseUtc > DateTime.MinValue)
+                {
+                    double pt = (now - a.PulseUtc).TotalSeconds;
+                    if (pt >= 0 && pt < 0.34)
+                    {
+                        float u = (float)(pt / 0.34);
+                        float s = (float)Math.Sin(Math.PI * u) * (1 - u * 0.4f);
+                        sx = 1 + 0.12f * s;
+                        sy = 1 + 0.12f * s;
+                    }
+                }
+                if (a.GulpUtc > DateTime.MinValue)
+                {
+                    double gt = (now - a.GulpUtc).TotalSeconds;
+                    if (gt >= 0 && gt < 0.38)
+                    {
+                        float g0 = (float)(gt / 0.38);
+                        float sw = (float)Math.Sin(Math.PI * Ease.OutCubic(g0)) * (1 - g0 * 0.35f);
+                        sx *= 1 + 0.20f * sw;
+                        sy *= 1 + 0.20f * sw;
+                    }
+                }
             }
 
             // Springs and clocks; true while anything still moves
@@ -302,14 +364,24 @@ namespace Tepi
                         {
                             a.Hops--;
                             a.Hop = a.Hops > 0 ? 0 : -1;
-                            if (a.Hop < 0) a.LaunchUtc = DateTime.MinValue;
                         }
                     }
+                    var now = DateTime.UtcNow;
+                    if (AppAnimMoving(a, now)) moving = true;
                     if (a.Leaving && a.Show.Value < 0.02f && a.Show.Target == 0) { apps.RemoveAt(i); moving = true; }
                 }
+                if (DockFlyersMoving(DateTime.UtcNow)) moving = true;
                 if (StepDrag(dt)) moving = true;
                 if (StepLabel(dt)) moving = true;
                 return moving;
+            }
+
+            static bool AppAnimMoving(DockApp a, DateTime now)
+            {
+                if (a.LaunchUtc > DateTime.MinValue && (now - a.LaunchUtc).TotalSeconds < 0.65) return true;
+                if (a.PulseUtc > DateTime.MinValue && (now - a.PulseUtc).TotalSeconds < 0.40) return true;
+                if (a.GulpUtc > DateTime.MinValue && (now - a.GulpUtc).TotalSeconds < 0.42) return true;
+                return false;
             }
 
             float WorkDotTarget()

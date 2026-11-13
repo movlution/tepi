@@ -47,6 +47,21 @@ namespace Tepi
             readonly List<KeyValuePair<RectangleF, string>> hits = new List<KeyValuePair<RectangleF, string>>();
             const float Pad = 10, ThumbH = 112, TitleH = 24, Cell = 34;
 
+            sealed class CardFlyer
+            {
+                public Bitmap Img;
+                public Rectangle Src;
+                public RectangleF From;
+                public float Vx, Vy, Spin, Delay;
+            }
+
+            readonly List<CardFlyer> cardFlyers = new List<CardFlyer>();
+            readonly List<Bitmap> cardFlyerImgs = new List<Bitmap>();
+            DateTime cardFlyUtc = DateTime.MinValue;
+            const double CardScatterSecs = 0.42;
+            readonly Spring thumbCollapse = new Spring(0, 260, 22, 0.25f);
+            int collapseIndex = -1;
+
             [StructLayout(LayoutKind.Sequential)] struct Margins { public int L, R, T, B; }
 
             [StructLayout(LayoutKind.Sequential)]
@@ -281,7 +296,7 @@ namespace Tepi
                 Render();
             }
 
-            int Rise() { return (int)Math.Round((1 - open.Value) * 8 * scale); }
+            int Rise() { return (int)Math.Round((1 - open.Value) * 12 * scale); }
 
             void TakePlate(DockPlate pl)
             {
@@ -298,10 +313,12 @@ namespace Tepi
                 float dt = (float)Math.Min(0.05, (now - lastStep).TotalSeconds);
                 lastStep = now;
                 open.Step(dt);
-                if (leaving && open.Value < 0.03f) { frames.Stop(); Finish(); return; }
+                thumbCollapse.Step(dt);
+                bool moreFly = CardFlyersMoving(now);
+                if (leaving && open.Value < 0.03f && !moreFly) { frames.Stop(); Finish(); return; }
                 Location = new Point(Location.X, baseY + Rise());
                 Render();
-                if (open.Settled) frames.Stop();
+                if (open.Settled && thumbCollapse.Settled && !moreFly) frames.Stop();
             }
 
             void MakeCanvas(int w, int h)
@@ -327,6 +344,7 @@ namespace Tepi
 
             void Free()
             {
+                ClearCardFlyers();
                 if (g == null) return;
                 g.Dispose();
                 canvas.Dispose();
@@ -366,13 +384,14 @@ namespace Tepi
                         g.Restore(inner);
                     }
                     g.FillPath(p.B(Ink.A(Ink.Veil, plate != null && dock.Glass ? 0.3f : 0.94f)), path);
-                    using (var lg = new LinearGradientBrush(new RectangleF(r.X, r.Y - 1, r.Width, 40), Color.FromArgb((int)(fade * (Ink.Light ? 80 : 22)), 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90f))
+                    using (var lg = new LinearGradientBrush(new RectangleF(r.X, r.Y - 1, r.Width, 40), Color.FromArgb((int)(fade * (Ink.Light ? 80 : 22)), p.T.Highlight), Color.FromArgb(0, p.T.Highlight), 90f))
                         g.FillRectangle(lg, r.X, r.Y, r.Width, 39);
                     g.Restore(st);
-                    g.DrawPath(p.P(Color.FromArgb(Ink.Light ? 70 : 40, 255, 255, 255), 1f), path);
+                    g.DrawPath(p.P(Color.FromArgb(Ink.Light ? 70 : 40, p.T.Highlight), 1f), path);
                 }
                 if (Kind == WindowsKind) DrawWindows(fade);
                 else DrawTray();
+                DrawCardFlyers(DateTime.UtcNow);
                 p.Alpha = 1;
                 g.Flush(FlushIntention.Sync);
                 if (IsHandleCreated)
@@ -394,31 +413,123 @@ namespace Tepi
                 e.Graphics.ReleaseHdc(hdc);
             }
 
+            bool CardFlyersMoving(DateTime now)
+            {
+                if (cardFlyers.Count == 0) return false;
+                if ((now - cardFlyUtc).TotalSeconds < CardScatterSecs + 0.1) return true;
+                ClearCardFlyers();
+                return false;
+            }
+
+            void ClearCardFlyers()
+            {
+                cardFlyers.Clear();
+                foreach (var b in cardFlyerImgs) b.Dispose();
+                cardFlyerImgs.Clear();
+            }
+
+            void ShatterCardBox(RectangleF box)
+            {
+                if (Anim.Reduced || canvas == null) return;
+                var px = Rectangle.Intersect(Rectangle.Round(new RectangleF(box.X * scale, box.Y * scale, box.Width * scale, box.Height * scale)), new Rectangle(0, 0, cw, ch));
+                if (px.Width < 8 || px.Height < 8) return;
+                var img = new Bitmap(px.Width, px.Height, PixelFormat.Format32bppPArgb);
+                using (var bg = Graphics.FromImage(img))
+                {
+                    bg.CompositingMode = CompositingMode.SourceCopy;
+                    bg.DrawImage(canvas, new Rectangle(0, 0, px.Width, px.Height), px, GraphicsUnit.Pixel);
+                }
+                cardFlyerImgs.Add(img);
+                const int cols = 4, rows = 4;
+                float dw = box.Width / cols, dh = box.Height / rows;
+                float sw = (float)img.Width / cols, sh = (float)img.Height / rows;
+                for (int y = 0; y < rows; y++)
+                {
+                    for (int x = 0; x < cols; x++)
+                    {
+                        float nx = (x + 0.5f) / cols - 0.5f;
+                        float ny = (y + 0.5f) / rows - 0.5f;
+                        float hash = ((x * 11 + y * 5) % 9) / 9f - 0.5f;
+                        cardFlyers.Add(new CardFlyer
+                        {
+                            Img = img,
+                            Src = Rectangle.Round(new RectangleF(x * sw, y * sh, sw, sh)),
+                            From = new RectangleF(box.X + x * dw, box.Y + y * dh, dw, dh),
+                            Vx = nx * 180 + hash * 50,
+                            Vy = ny * 110 - 90 - Math.Abs(hash) * 45,
+                            Spin = nx * 240 + hash * 100,
+                            Delay = Math.Abs(nx) * 0.03f
+                        });
+                    }
+                }
+                cardFlyUtc = DateTime.UtcNow;
+                frames.Start();
+            }
+
+            void DrawCardFlyers(DateTime now)
+            {
+                if (cardFlyers.Count == 0) return;
+                double t0 = (now - cardFlyUtc).TotalSeconds;
+                bool alive = false;
+                var keepMode = g.InterpolationMode;
+                g.InterpolationMode = InterpolationMode.Bilinear;
+                using (var ia = new ImageAttributes())
+                {
+                    var cm = new ColorMatrix();
+                    foreach (var f in cardFlyers)
+                    {
+                        float t = (float)((t0 - f.Delay) / CardScatterSecs);
+                        if (t >= 1) continue;
+                        alive = true;
+                        t = Math.Max(0, t);
+                        float x = f.From.X + f.Vx * t * (float)CardScatterSecs;
+                        float y = f.From.Y + (f.Vy * t + 360 * t * t) * (float)CardScatterSecs;
+                        float alpha = (1 - t) * (1 - t);
+                        cm.Matrix33 = alpha;
+                        ia.SetColorMatrix(cm);
+                        var dst = new RectangleF(x, y, f.From.Width, f.From.Height);
+                        var st = g.Save();
+                        g.TranslateTransform(dst.X + dst.Width / 2, dst.Y + dst.Height / 2);
+                        g.RotateTransform(f.Spin * t);
+                        var pts = new[] { new PointF(-dst.Width / 2, -dst.Height / 2), new PointF(dst.Width / 2, -dst.Height / 2), new PointF(-dst.Width / 2, dst.Height / 2) };
+                        g.DrawImage(f.Img, pts, f.Src, GraphicsUnit.Pixel, ia);
+                        g.Restore(st);
+                    }
+                }
+                g.InterpolationMode = keepMode;
+                if (!alive) ClearCardFlyers();
+            }
+
             void DrawWindows(float fade)
             {
-                foreach (var t in thumbs)
+                for (int i = 0; i < thumbs.Count; i++)
                 {
+                    var t = thumbs[i];
+                    float dx = collapseIndex >= 0 && i >= collapseIndex ? thumbCollapse.Value : 0;
+                    var box = new RectangleF(t.Box.X + dx, t.Box.Y, t.Box.Width, t.Box.Height);
+                    var pic = new RectangleF(t.Pic.X + dx, t.Pic.Y, t.Pic.Width, t.Pic.Height);
+                    var close = new RectangleF(t.Close.X + dx, t.Close.Y, t.Close.Width, t.Close.Height);
                     string id = "w" + t.Win.H.ToInt64();
                     bool on = hot == id || hot == "x" + id;
-                    if (on) p.FillRound(t.Box, 11, press == id ? p.T.FillPressed : p.T.FillHover);
-                    hits.Add(new KeyValuePair<RectangleF, string>(t.Box, id));
-                    float tx = t.Box.X + 8, ty = t.Box.Y + TitleH / 2 + 2;
+                    if (on) p.FillRound(box, 11, press == id ? p.T.FillPressed : p.T.FillHover);
+                    hits.Add(new KeyValuePair<RectangleF, string>(box, id));
+                    float tx = box.X + 8, ty = box.Y + TitleH / 2 + 2;
                     // The app's icon before the title, as the taskbar shows it
                     var mark = dock.IconOf(App);
                     if (mark != null) { g.DrawImage(mark, new RectangleF(tx, ty - 8, 16, 16)); tx += 22; }
-                    p.Text(t.Win.Title, Ink.Semi(11.5f), p.T.Text, tx, ty, t.Box.Right - tx - (on ? 32 : 8), StringAlignment.Near);
+                    p.Text(t.Win.Title, Ink.Semi(11.5f), p.T.Text, tx, ty, box.Right - tx - (on ? 32 : 8), StringAlignment.Near);
                     if (on)
                     {
-                        hits.Add(new KeyValuePair<RectangleF, string>(t.Close, "x" + id));
-                        if (hot == "x" + id) p.FillRound(t.Close, 6, BadgeRedSoft);
-                        p.Icon('\uE711', 9.5f, hot == "x" + id ? Color.White : p.T.Sub, t.Close.X + t.Close.Width / 2, t.Close.Y + t.Close.Height / 2);
+                        hits.Add(new KeyValuePair<RectangleF, string>(close, "x" + id));
+                        if (hot == "x" + id) p.FillRound(close, 6, p.T.Negative);
+                        p.Icon('\uE711', 9.5f, hot == "x" + id ? (p.T.IsDark ? p.T.Bg : Color.White) : p.T.Sub, close.X + close.Width / 2, close.Y + close.Height / 2);
                     }
                     // Seen only when Windows has no live picture of the window
-                    p.FillRound(t.Pic, 8, p.T.Fill);
-                    if (mark != null) g.DrawImage(mark, new RectangleF(t.Pic.X + t.Pic.Width / 2 - 20, t.Pic.Y + t.Pic.Height / 2 - 20, 40, 40));
+                    p.FillRound(pic, 8, p.T.Fill);
+                    if (mark != null) g.DrawImage(mark, new RectangleF(pic.X + pic.Width / 2 - 20, pic.Y + pic.Height / 2 - 20, 40, 40));
                     if (t.Id == IntPtr.Zero) continue;
                     // DWM paints the live window over this spot
-                    var d = t.Pic;
+                    var d = pic;
                     var props = new ThumbProps
                     {
                         Flags = 0x1 | 0x4 | 0x8 | 0x10,
@@ -430,8 +541,6 @@ namespace Tepi
                     DwmUpdateThumbnailProperties(t.Id, ref props);
                 }
             }
-
-            static readonly Color BadgeRedSoft = Color.FromArgb(230, 196, 43, 28);
 
             void DrawTray()
             {
@@ -533,7 +642,26 @@ namespace Tepi
                 if (id == "gear") { dock.CardDone(this); OpenSettings(); return; }
                 var t = thumbs.Find(x => id.EndsWith("w" + x.Win.H.ToInt64(), StringComparison.Ordinal));
                 if (t == null) return;
-                if (id.StartsWith("x", StringComparison.Ordinal) || e.Button == MouseButtons.Middle) { ShellApp.Close(t.Win.H); return; }
+                if (id.StartsWith("x", StringComparison.Ordinal) || e.Button == MouseButtons.Middle)
+                {
+                    int idx = thumbs.IndexOf(t);
+                    var closedBox = t.Box;
+                    ShatterCardBox(closedBox);
+                    if (App != null) App.GulpUtc = DateTime.UtcNow;
+                    if (thumbs.Count > 1 && idx >= 0)
+                    {
+                        if (t.Id != IntPtr.Zero) DwmUnregisterThumbnail(t.Id);
+                        thumbs.RemoveAt(idx);
+                        collapseIndex = idx;
+                        thumbCollapse.Snap(closedBox.Width + 6);
+                        thumbCollapse.Target = 0;
+                        Arrange();
+                        frames.Start();
+                    }
+                    else dock.CardDone(this);
+                    ShellApp.Close(t.Win.H);
+                    return;
+                }
                 if (e.Button == MouseButtons.Left) { ShellApp.Activate(t.Win.H); dock.CardDone(this); }
             }
 

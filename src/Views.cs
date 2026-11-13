@@ -63,7 +63,7 @@ namespace Tepi
             switch (v)
             {
                 case View.Panel:
-                case View.Approve: return 30;
+                case View.Approve:
                 case View.Track:
                 case View.Done:
                 case View.Notif:
@@ -71,9 +71,10 @@ namespace Tepi
                 case View.Shot:
                 case View.Drive:
                 case View.Otp:
-                case View.Prompter: return 26;
-                case View.Mirror: return 28;
-                case View.Convert: return 26;
+                case View.Prompter:
+                case View.Mirror:
+                case View.Convert:
+                    return Math.Min(Ink.RadiusShell, s.Height / 2);
             }
             return s.Height / 2;
         }
@@ -659,18 +660,18 @@ namespace Tepi
             var always = new RectangleF(deny.X - 8 - 84, y, 84, 32);
             // Unseen text is never allowed here
             bool locked = (clipped && !a.ReadAll) || !armed || a.Truncated;
-            if (locked) p.StrokeRound(allow, 10, p.T.Faint, 1.2f);
-            else p.FillRound(allow, 10, Hover("allow") ? Ink.A(p.T.Text, 0.82f) : p.T.Text);
+            if (locked) p.StrokeRound(allow, Ink.RadiusControl, p.T.Faint, 1.2f);
+            else p.FillRound(allow, Ink.RadiusControl, Hover("allow") ? Ink.A(p.T.Text, 0.82f) : p.T.Text);
             p.TextCenter(Lang.T("Izinkan"), Ink.Semi(13f), locked ? p.T.Faint : p.T.Bg, allow.X + allow.Width / 2, allow.Y + 16);
-            if (Hover("deny")) p.FillRound(deny, 10, p.T.Fill);
-            p.StrokeRound(deny, 10, p.T.Sub, 1.2f);
+            if (Hover("deny")) p.FillRound(deny, Ink.RadiusControl, p.T.Fill);
+            p.StrokeRound(deny, Ink.RadiusControl, p.T.Sub, 1.2f);
             p.TextCenter(Lang.T("Tolak"), Ink.Semi(13f), p.T.Text, deny.X + deny.Width / 2, deny.Y + 16);
             bool once = locked || a.Risk != null;
-            if (!once && Hover("always")) p.FillRound(always, 10, p.T.Fill);
-            p.StrokeRound(always, 10, once ? p.T.Faint : p.T.Sub, 1.2f);
+            if (!once && Hover("always")) p.FillRound(always, Ink.RadiusControl, p.T.Fill);
+            p.StrokeRound(always, Ink.RadiusControl, once ? p.T.Faint : p.T.Sub, 1.2f);
             p.TextCenter(Lang.T("Selalu"), Ink.Semi(13f), once ? p.T.Faint : p.T.Text, always.X + always.Width / 2, always.Y + 16);
             var term = new RectangleF(14, y, always.X - 8 - 14, 32);
-            if (Hover("term")) p.FillRound(term, 10, p.T.Fill);
+            if (Hover("term")) p.FillRound(term, Ink.RadiusControl, p.T.Fill);
             p.Icon(Ink.IcoTerminal, 12f, p.T.Sub, term.X + 18, term.Y + 16);
             p.Text(Lang.T("Terminal"), Ink.Small(12f), Hover("term") || (clipped && !scrollable) || a.Truncated ? p.T.Text : p.T.Sub, term.X + 32, term.Y + 16, term.Width - 36, StringAlignment.Near);
             if (!locked) AddHit(allow, "allow", delegate { Decide(a, "allow"); });
@@ -753,10 +754,10 @@ namespace Tepi
             float cy = h / 2;
             DrawAppBadge(item, new RectangleF(14, cy - 20, 40, 40));
             string meta = notifBurst > 1 ? notifBurst + Lang.T(" pesan · ") + item.AppName : item.AppName;
-            float mw = Math.Min(130, p.Measure(meta, Ink.Small(11f)));
-            p.TextRight(meta, Ink.Small(11f), p.T.Sub, w - 22, cy - 10);
-            p.Text(NotifTitle(item), Ink.Semi(13.5f), p.T.Text, 66, cy - 10, w - 66 - 32 - mw, StringAlignment.Near);
-            p.Text(NotifBody(item), Ink.Text(12.5f), p.T.Sub, 66, cy + 10, w - 66 - 22, StringAlignment.Near);
+            float mw = Math.Min(w * 0.35f, p.Measure(meta, Ink.Caption));
+            p.Text(meta, Ink.Caption, p.T.Sub, w - 22, cy - 10, mw, StringAlignment.Far);
+            p.Text(NotifTitle(item), Ink.Headline, p.T.Text, 66, cy - 10, Math.Max(40, w - 66 - 22 - mw - 12), StringAlignment.Near);
+            p.Text(NotifBody(item), Ink.Callout, p.T.Sub, 66, cy + 10, w - 66 - 22, StringAlignment.Near);
             AddHit(new RectangleF(0, 0, w, h), "notifOpen", delegate { OpenNotifApp(item); });
         }
 

@@ -336,16 +336,18 @@ namespace Tepi
     }
 
     // Email + 6-digit code, like kulia.live/masuk
-    class KuliaLogin : Form
+    class KuliaLogin : KitWindow
     {
         readonly KuliaClient client;
-        readonly Label heading = new Label(), hint = new Label(), status = new Label();
-        readonly TextBox field = new KitText();
-        readonly Button primary = new Button(), back = new Button();
+        readonly Label heading = new Label { AutoSize = false };
+        readonly Label hint = new Label { AutoSize = false };
+        readonly Label status = new Label { AutoSize = false };
+        readonly KitText field = new KitText();
+        readonly KitButton primary = new KitButton { Primary = true };
+        readonly KitButton back = new KitButton();
         string address;
         bool codeStep;
-
-        [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+        bool statusIsError;
 
         public KuliaLogin(KuliaClient client)
         {
@@ -354,65 +356,69 @@ namespace Tepi
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            AutoScaleMode = AutoScaleMode.None;
-            Load += delegate { KitWindow.ScaleToDpi(this); };
-            HandleCreated += delegate { Native.RoundCorners(Handle); };
-            ClientSize = new Size(400, 236);
-            ShowInTaskbar = true;
+            ShowInTaskbar = false;
             TopMost = true;
-            var bg = Ink.Light ? Color.FromArgb(245, 245, 245) : Color.FromArgb(10, 10, 10);
-            var fg = Ink.Light ? Color.FromArgb(10, 10, 10) : Color.FromArgb(244, 244, 244);
-            var sub = Ink.Light ? Color.FromArgb(88, 88, 88) : Color.FromArgb(160, 160, 160);
-            BackColor = bg;
-            ForeColor = fg;
-            Font = Ink.Text(14f);
 
-            heading.SetBounds(24, 20, 352, 30);
-            heading.Font = Ink.Display(20f);
             heading.Text = Lang.T("Masuk ke Kulia");
-            hint.SetBounds(24, 54, 352, 40);
-            hint.ForeColor = sub;
-            field.SetBounds(24, 100, 352, 30);
-            field.BorderStyle = BorderStyle.FixedSingle;
-            field.BackColor = Ink.Light ? Color.White : Color.FromArgb(24, 24, 24);
-            field.ForeColor = fg;
-            field.Font = Ink.Text(15f);
-            status.SetBounds(24, 136, 352, 36);
-            status.ForeColor = fg;
-
-            primary.SetBounds(236, 184, 140, 34);
-            Style(primary, fg, bg);
-            back.SetBounds(24, 184, 140, 34);
-            Style(back, bg, fg);
-            back.FlatAppearance.BorderColor = sub;
-            back.FlatAppearance.BorderSize = 1;
             back.Text = Lang.T("Ganti email");
             back.Click += delegate { ShowEmailStep(); };
             primary.Click += delegate { Submit(); };
             AcceptButton = primary;
-            KeyPreview = true;
-            KeyDown += (s, e) => { if (e.KeyCode == Keys.Escape) Close(); };
 
             Controls.AddRange(new Control[] { heading, hint, field, status, primary, back });
             ShowEmailStep();
             if (client.Email.Length > 0) field.Text = client.Email;
         }
 
-        static void Style(Button b, Color bg, Color fg)
-        {
-            b.FlatStyle = FlatStyle.Flat;
-            b.FlatAppearance.BorderSize = 0;
-            b.BackColor = bg;
-            b.ForeColor = fg;
-            b.Font = Ink.Semi(14f);
-            b.Cursor = Cursors.Hand;
-        }
-
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
-            int dark = Ink.Light ? 0 : 1;
-            try { DwmSetWindowAttribute(Handle, 20, ref dark, 4); } catch (Exception) { }
+            Relayout();
+        }
+
+        public override void Relayout()
+        {
+            if (!IsHandleCreated) return;
+            float s = Ui;
+            Func<float, int> u = v => (int)Math.Round(v * s);
+
+            BackColor = KitInk.Window;
+            ForeColor = KitInk.Text;
+            Native.DarkFrame(Handle, !Ink.Light);
+
+            int pad = u(24), w = u(400), inner = w - 2 * pad;
+
+            heading.Font = Ink.Display(20f * s);
+            heading.ForeColor = KitInk.Text;
+            heading.BackColor = KitInk.Window;
+            heading.SetBounds(pad, u(20), inner, u(30));
+
+            hint.Font = UiFont(12.5f);
+            hint.ForeColor = KitInk.Sub;
+            hint.BackColor = KitInk.Window;
+            hint.SetBounds(pad, heading.Bottom + u(4), inner, u(38));
+
+            field.Font = UiFont(14f);
+            field.BackColor = KitInk.Group;
+            field.ForeColor = KitInk.Text;
+            field.BorderStyle = BorderStyle.FixedSingle;
+            field.SetBounds(pad, hint.Bottom + u(8), inner, u(32));
+
+            status.Font = UiFont(12.5f);
+            status.ForeColor = statusIsError ? Ink.Base.Negative : KitInk.Text;
+            status.BackColor = KitInk.Window;
+            status.SetBounds(pad, field.Bottom + u(6), inner, u(32));
+
+            int btnH = u(34), btnW = u(140), by = status.Bottom + u(12);
+
+            back.Font = UiFont(13f);
+            back.SetBounds(pad, by, btnW, btnH);
+
+            primary.Font = UiFont(13f);
+            primary.SetBounds(w - pad - btnW, by, btnW, btnH);
+
+            ClientSize = new Size(w, by + btnH + u(20));
+            Invalidate(true);
         }
 
         void ShowEmailStep()
@@ -421,10 +427,10 @@ namespace Tepi
             hint.Text = Lang.T("Email akun kulia.live");
             field.Text = address ?? client.Email;
             field.MaxLength = 120;
-            Native.SendMessage(field.Handle, 0x1501, (IntPtr)1, "email@contoh.com");
+            Native.SetCue(field.Handle, "email@contoh.com");
             primary.Text = Lang.T("Kirim kode");
             back.Visible = false;
-            status.Text = "";
+            status.Text = ""; statusIsError = false;
             field.Focus();
         }
 
@@ -434,10 +440,10 @@ namespace Tepi
             hint.Text = Lang.T("Kode masuk terkirim ke ") + address;
             field.Text = "";
             field.MaxLength = 14;
-            Native.SendMessage(field.Handle, 0x1501, (IntPtr)1, Lang.T("Kode dari email"));
+            Native.SetCue(field.Handle, Lang.T("Kode dari email"));
             primary.Text = Lang.T("Masuk");
             back.Visible = true;
-            status.Text = "";
+            status.Text = ""; statusIsError = false;
             field.Focus();
         }
 
@@ -446,7 +452,13 @@ namespace Tepi
             string value = field.Text.Trim();
             if (!codeStep)
             {
-                if (!Regex.IsMatch(value, @"^[^@\s]+@[^@\s]+\.[^@\s]+$")) { status.Text = Lang.T("Format email belum lengkap"); return; }
+                if (!Regex.IsMatch(value, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
+                {
+                    status.Text = Lang.T("Format email belum lengkap");
+                    statusIsError = true;
+                    status.ForeColor = Ink.Base.Negative;
+                    return;
+                }
                 address = value;
                 Busy(Lang.T("Mengirim kode…"));
                 ThreadPool.QueueUserWorkItem(delegate
@@ -458,7 +470,13 @@ namespace Tepi
                 return;
             }
             value = value.Replace(" ", "").Replace("-", "");
-            if (!Regex.IsMatch(value, @"^\d{6,10}$")) { status.Text = Lang.T("Kode berisi 6 sampai 10 angka"); return; }
+            if (!Regex.IsMatch(value, @"^\d{6,10}$"))
+            {
+                status.Text = Lang.T("Kode berisi 6 sampai 10 angka");
+                statusIsError = true;
+                status.ForeColor = Ink.Base.Negative;
+                return;
+            }
             Busy(Lang.T("Memeriksa kode…"));
             ThreadPool.QueueUserWorkItem(delegate
             {
@@ -471,6 +489,8 @@ namespace Tepi
         void Busy(string text)
         {
             status.Text = text;
+            statusIsError = false;
+            status.ForeColor = KitInk.Text;
             primary.Enabled = field.Enabled = back.Enabled = false;
         }
 
@@ -480,7 +500,14 @@ namespace Tepi
             BeginInvoke(new Action(delegate
             {
                 primary.Enabled = field.Enabled = back.Enabled = true;
-                if (error != null) { status.Text = error; field.Focus(); return; }
+                if (error != null)
+                {
+                    status.Text = error;
+                    statusIsError = true;
+                    status.ForeColor = Ink.Base.Negative;
+                    field.Focus();
+                    return;
+                }
                 ok();
             }));
         }

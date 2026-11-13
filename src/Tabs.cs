@@ -333,7 +333,7 @@ namespace Tepi
                 case PageAgents: DrawAgentsPage(w, h, now); break;
                 case PageClass:
                 case PageShelf: DrawSegmentPage(pg, w, h, now); break;
-                case PageMessages: DrawMessagesPage(w, h); break;
+                case PageMessages: DrawMessagesPage(w, h, now); break;
                 case PageControl: DrawControlPage(w, h, now); break;
                 case PageRemind: DrawRemindPage(w, h, now); break;
                 case PagePhone: DrawPhonePage(w, h, now); break;
@@ -516,7 +516,7 @@ namespace Tepi
                 int to = tabs[i];
                 var hit = new RectangleF(tabToX[i], TabY, tabToW[i], TabH);
                 AddHit(hit, "tab" + to, delegate { SetPage(to, false); });
-                if (Hover("tab" + to) && to != page) p.FillRound(rects[i], TabH / 2, Pressed("tab" + to) ? p.T.FillHover : p.T.Fill);
+                if (Hover("tab" + to) && to != page) p.FillRound(rects[i], TabH / 2, Pressed("tab" + to) ? p.T.FillPressed : p.T.FillHover);
                 DrawTabIconFast(to, rects[i].X + TabIcon / 2, TabY + TabH / 2, Hover("tab" + to) ? p.T.Text : p.T.Sub, to != page);
             }
             // Hidden tab via link: no pill
@@ -818,7 +818,7 @@ namespace Tepi
         {
             var r = new RectangleF(w - 52, TabY, 34, TabH);
             AddHit(r, "prefsOpen", openPrefsAct ?? (openPrefsAct = delegate { BeginInvoke(new Action(OpenPrefs)); }));
-            if (Hover("prefsOpen")) p.FillRound(r, TabH / 2, Pressed("prefsOpen") ? p.T.FillHover : p.T.Fill);
+            if (Hover("prefsOpen")) p.FillRound(r, TabH / 2, Pressed("prefsOpen") ? p.T.FillPressed : p.T.FillHover);
             p.Icon('', 13f, Hover("prefsOpen") ? p.T.Text : p.T.Sub, r.X + 17, r.Y + TabH / 2);
         }
 
@@ -829,7 +829,7 @@ namespace Tepi
         {
             var r = new RectangleF(tabLayoutW - 88, TabY, 34, TabH);
             AddHit(r, id, act);
-            if (Hover(id)) p.FillRound(r, TabH / 2, Pressed(id) ? p.T.FillHover : p.T.Fill);
+            if (Hover(id)) p.FillRound(r, TabH / 2, Pressed(id) ? p.T.FillPressed : p.T.FillHover);
             if (trash) { var c = CanvasRect(r); trashPt = new PointF(c.X + c.Width / 2, c.Y + c.Height / 2); }
             float s = trash ? TrashScale(DateTime.UtcNow) : 1;
             p.Icon(glyph, 13f * s, Hover(id) || s > 1.01f ? p.T.Text : p.T.Sub, r.X + 17, r.Y + TabH / 2);
@@ -844,7 +844,7 @@ namespace Tepi
             {
                 bool album = AlbumMode();
                 AddHit(r, "musicView", delegate { ToggleMusicView(); });
-                if (Hover("musicView")) p.FillRound(r, TabH / 2, Pressed("musicView") ? p.T.FillHover : p.T.Fill);
+                if (Hover("musicView")) p.FillRound(r, TabH / 2, Pressed("musicView") ? p.T.FillPressed : p.T.FillHover);
                 Color c = Hover("musicView") ? p.T.Text : p.T.Sub;
                 float cx = r.X + r.Width / 2, cy = r.Y + r.Height / 2;
                 if (album)

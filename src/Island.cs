@@ -786,6 +786,7 @@ namespace Tepi
             float gap = side ? Gap : Docked ? 0 : Math.Max(0, topGap.Value);
             if (Docked && !side) H += Math.Max(0, topGap.Value - Gap);
             int pxH = Math.Min(canvasH, (int)Math.Ceiling((gap + Math.Max(H, BubbleR * 2) + Pad + extra) * scale));
+            if (FlyersMoving(now) && canvasTall) pxH = canvasH;
             float cx = pxW / scale / 2f;
             var origin = CanvasAt(pxW, W, H);
             frameLeft = origin.X;
@@ -802,7 +803,7 @@ namespace Tepi
             g.ScaleTransform(scale, scale);
             p.HalfPx = 0.5f / scale;
             p.Alpha = 1f;
-            p.T = Ink.Base;
+            p.T = GlassOn ? Ink.Base.OnGlass() : Ink.Base;
             backdropInSurface = false;
 
             shell = new RectangleF(cx - W / 2, gap, W, H);
@@ -812,12 +813,13 @@ namespace Tepi
             bubbleRect = pb > 0.02f ? new RectangleF(bx - br, rowCy - br, br * 2, br * 2) : RectangleF.Empty;
 
             double t0 = Prof.T();
-            // Glass pills skip the drop shadow
-            if ((!GlassOn || H > 60) && current != View.Prompter)
+            // Full drop shadow for opaque or tall views; subtle elevation shadow on glass pills (H <= 60) for depth over light wallpapers
+            if (current != View.Prompter)
             {
+                float shadowStr = (GlassOn && H <= 60) ? (Ink.Light ? 0.45f : 0.35f) : 1f;
                 // Target radius while morphing: one bake
-                DrawShadow(shell, sr.Settled ? R : Math.Min(sr.Target, Math.Min(W, H) / 2), 1f);
-                if (!bubbleRect.IsEmpty) DrawShadow(bubbleRect, br, 0.7f);
+                DrawShadow(shell, sr.Settled ? R : Math.Min(sr.Target, Math.Min(W, H) / 2), shadowStr);
+                if (!bubbleRect.IsEmpty) DrawShadow(bubbleRect, br, (GlassOn && H <= 60) ? 0.3f : 0.7f);
             }
             DrawGlow(now, shell, R);
             Prof.Add("shadow", t0);
@@ -843,7 +845,7 @@ namespace Tepi
                     var st = g.Save();
                     g.SetClip(path, CombineMode.Intersect);
                     liveInShell = true;
-                    DrawContent(now, Ink.Base, flip < 0.5f);
+                    DrawContent(now, GlassOn ? Ink.Base.OnGlass() : Ink.Base, flip < 0.5f);
                     DrawEdgeLight(now, path, shell);
                     liveInShell = false;
                     DrawWater(now);
@@ -864,11 +866,11 @@ namespace Tepi
                         g.SetClip(circle, CombineMode.Intersect);
                     }
                     FillSurface(path, shell, Ink.Flip, 0.8f, pxW);
-                    DrawContent(now, Ink.Flip, flip >= 0.5f);
+                    DrawContent(now, GlassOn ? Ink.Flip.OnGlass() : Ink.Flip, flip >= 0.5f);
                     g.Restore(st);
                 }
             }
-            p.T = Ink.Base;
+            p.T = GlassOn ? Ink.Base.OnGlass() : Ink.Base;
             p.Alpha = 1f;
             if (!bubbleRect.IsEmpty) DrawBubbleContent(now, rowCy, bx, br, Ease.Clamp01((pb - 0.5f) / 0.5f));
             DrawCorner(now);
@@ -1139,7 +1141,7 @@ namespace Tepi
         void DrawGlow(DateTime now, RectangleF r, float radius)
         {
             if (flip < 0.05f) return;
-            float breath = 0.55f + 0.45f * (float)Math.Sin(clock.Elapsed.TotalSeconds * Math.PI * 1.3);
+            float breath = Anim.Reduced ? 0.75f : 0.55f + 0.45f * (float)Math.Sin(clock.Elapsed.TotalSeconds * Math.PI * 1.3);
             Color c = Ink.Flip.Bg;
             // Thin layers: falloff without bands
             for (int i = 0; i < GlowLayers; i++)
@@ -1239,13 +1241,14 @@ namespace Tepi
 
         void DrawContent(DateTime now, Tone tone, bool registerHits)
         {
+            if (GlassOn && tone != null) tone = tone.OnGlass();
             p.T = tone;
             // Text shadow on the pill only
             p.Shadow = GlassOn && !LiquidOn && tone.Bg.R < 128 && current != View.Panel;
             TrackPress();
             float t = (float)(now - switchedUtc).TotalSeconds;
             // New view follows 50 ms later
-            if (tone == Ink.Base) DrawSnapshot(now);
+            if (tone == Ink.Base || (GlassOn && tone != null && tone.Bg == Ink.Base.Bg)) DrawSnapshot(now);
             float inA = Ease.OutCubic((t - 0.05f) / 0.22f);
             float grow = Anim.Reduced || Kin(previous, current) ? 0 : 1 - Springs.Progress(t - 0.05f, 0.34f, 0.86f);
             DrawViewAt(current, inA, 1 + 0.04f * grow, registerHits && inA > 0.8f && grow < 0.15f, now);

@@ -89,6 +89,11 @@ namespace Tepi
 
     static class Ink
     {
+        static Ink()
+        {
+            Init();
+        }
+
         public static Tone Base = Tone.Dark(), Flip = Tone.Paper();
         public static bool Light;
 
@@ -98,6 +103,56 @@ namespace Tepi
         public static Color Veil { get { return VeilTint ?? Base.Bg; } }
         // Theme pack colors; "card." keys style the light cards
         static Dictionary<string, string> pack = new Dictionary<string, string>();
+
+        public static readonly string[][] DarkAccents =
+        {
+            new[] { "Monokrom", "" },
+            new[] { "Biru", "#4C8DFF" },
+            new[] { "Hijau", "#3DD68C" },
+            new[] { "Kuning", "#FFD24A" },
+            new[] { "Oranye", "#FF9F43" },
+            new[] { "Merah muda", "#FF6B9A" },
+            new[] { "Ungu", "#A78BFA" },
+            new[] { "Navy", "#7F8DC6" },
+        };
+
+        public static readonly string[][] LightAccents =
+        {
+            new[] { "Monokrom", "" },
+            new[] { "Biru", "#1668E8" },
+            new[] { "Hijau", "#107C41" },
+            new[] { "Kuning", "#855E00" },
+            new[] { "Oranye", "#A84B00" },
+            new[] { "Merah muda", "#C2185B" },
+            new[] { "Ungu", "#6C3CE0" },
+            new[] { "Navy", "#4D5F9E" },
+        };
+
+        static bool SameRgb(Color c, byte r, byte g, byte b) { return c.R == r && c.G == g && c.B == b; }
+
+        static Color GetLightAccent(Color c)
+        {
+            if (SameRgb(c, 0x4C, 0x8D, 0xFF)) return Color.FromArgb(255, 0x16, 0x68, 0xE8); // Biru
+            if (SameRgb(c, 0x3D, 0xD6, 0x8C)) return Color.FromArgb(255, 0x10, 0x7C, 0x41); // Hijau
+            if (SameRgb(c, 0xFF, 0xD2, 0x4A)) return Color.FromArgb(255, 0x85, 0x5E, 0x00); // Kuning
+            if (SameRgb(c, 0xFF, 0x9F, 0x43)) return Color.FromArgb(255, 0xA8, 0x4B, 0x00); // Oranye
+            if (SameRgb(c, 0xFF, 0x6B, 0x9A)) return Color.FromArgb(255, 0xC2, 0x18, 0x5B); // Merah muda
+            if (SameRgb(c, 0xA7, 0x8B, 0xFA)) return Color.FromArgb(255, 0x6C, 0x3C, 0xE0); // Ungu
+            if (SameRgb(c, 0x7F, 0x8D, 0xC6)) return Color.FromArgb(255, 0x4D, 0x5F, 0x9E); // Navy
+            return c;
+        }
+
+        static Color GetDarkAccent(Color c)
+        {
+            if (SameRgb(c, 0x16, 0x68, 0xE8)) return Color.FromArgb(255, 0x4C, 0x8D, 0xFF); // Biru
+            if (SameRgb(c, 0x10, 0x7C, 0x41)) return Color.FromArgb(255, 0x3D, 0xD6, 0x8C); // Hijau
+            if (SameRgb(c, 0x85, 0x5E, 0x00)) return Color.FromArgb(255, 0xFF, 0xD2, 0x4A); // Kuning
+            if (SameRgb(c, 0xA8, 0x4B, 0x00)) return Color.FromArgb(255, 0xFF, 0x9F, 0x43); // Oranye
+            if (SameRgb(c, 0xC2, 0x18, 0x5B)) return Color.FromArgb(255, 0xFF, 0x6B, 0x9A); // Merah muda
+            if (SameRgb(c, 0x6C, 0x3C, 0xE0)) return Color.FromArgb(255, 0xA7, 0x8B, 0xFA); // Ungu
+            if (SameRgb(c, 0x4D, 0x5F, 0x9E)) return Color.FromArgb(255, 0x7F, 0x8D, 0xC6); // Navy
+            return c;
+        }
 
         public static void SetPack(Dictionary<string, string> colors) { pack = colors ?? new Dictionary<string, string>(); }
 
@@ -147,7 +202,9 @@ namespace Tepi
             foreach (var t in new[] { Base, Flip }) { t.Accent = t.Text; t.OnAccent = t.Bg; t.Progress = t.Sub; }
             if (accent.HasValue)
             {
-                var c = accent.Value;
+                var c = light ? GetLightAccent(accent.Value) : GetDarkAccent(accent.Value);
+                if (light && Island.Contrast(c, Base.Bg) < 3.5)
+                    c = Island.EnforceContrast(c, Base.Bg, 3.5);
                 Base.Accent = Base.Progress = c;
                 // Ink on the accent: pick whichever actually wins on WCAG contrast,
                 // not a luma guess. Blue and navy presets used to land at ~3.07:1.
@@ -204,18 +261,22 @@ namespace Tepi
             var have = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             using (var fc = new InstalledFontCollection())
                 foreach (var f in fc.Families) have.Add(f.Name);
-            families[FDisplay] = Pick(have, "Segoe UI Variable Display Semib", "Segoe UI Semibold", "Segoe UI");
+            families[FDisplay] = Pick(have, "Segoe UI Variable Display Semibold", "Segoe UI Variable Display Semib", "Segoe UI Semibold", "Segoe UI");
             families[FText] = Pick(have, "Segoe UI Variable Text", "Segoe UI");
             families[FSemi] = Pick(have, "Segoe UI Variable Text Semibold", "Segoe UI Semibold", "Segoe UI");
             families[FSmall] = Pick(have, "Segoe UI Variable Small", "Segoe UI");
             families[FMono] = Pick(have, "Cascadia Mono", "Consolas", "Courier New");
             families[FIcons] = Pick(have, "Segoe Fluent Icons", "Segoe MDL2 Assets", "Segoe UI Symbol");
-            families[FSmallSemi] = Pick(have, "Segoe UI Variable Small Semibol", "Segoe UI Semibold", "Segoe UI");
+            families[FSmallSemi] = Pick(have, "Segoe UI Variable Small Semibold", "Segoe UI Variable Small Semibol", "Segoe UI Semibold", "Segoe UI");
         }
 
         static string Pick(HashSet<string> have, params string[] names)
         {
-            foreach (var n in names) if (have.Contains(n)) return n;
+            foreach (var n in names)
+            {
+                if (have.Contains(n)) return n;
+                if (n.Length > 31 && have.Contains(n.Substring(0, 31))) return n.Substring(0, 31);
+            }
             return System.Drawing.SystemFonts.MessageBoxFont.FontFamily.Name;
         }
 

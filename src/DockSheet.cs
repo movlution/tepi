@@ -34,6 +34,18 @@ namespace Tepi
             bool allowClose, leaving;
             readonly System.Windows.Forms.Timer frames = new System.Windows.Forms.Timer { Interval = 15 };
             DateTime lastStep;
+            readonly Dictionary<string, Spring> squish = new Dictionary<string, Spring>();
+            sealed class SheetFlyer
+            {
+                public Bitmap Img;
+                public Rectangle Src;
+                public RectangleF From;
+                public float Vx, Vy, Spin, Delay;
+            }
+            readonly List<SheetFlyer> sheetFlyers = new List<SheetFlyer>();
+            readonly List<Bitmap> sheetFlyerImgs = new List<Bitmap>();
+            DateTime sheetFlyUtc = DateTime.MinValue;
+            const double SheetScatterSecs = 0.42;
 
             // Fading out: no more input
             protected bool Leaving { get { return leaving; } }
@@ -178,7 +190,7 @@ namespace Tepi
                 Activate();
             }
 
-            int Rise() { return (int)Math.Round((1 - open.Value) * 8 * scale); }
+            int Rise() { return (int)Math.Round((1 - open.Value) * 14 * scale); }
 
             void Step()
             {
@@ -186,11 +198,151 @@ namespace Tepi
                 float dt = (float)Math.Min(0.05, (now - lastStep).TotalSeconds);
                 lastStep = now;
                 open.Step(dt);
-                if (leaving && open.Value < 0.03f) { frames.Stop(); Finish(); return; }
-                bool more = !leaving && Animating(dt);
+                bool moreSquish = StepSquish(dt);
+                bool moreFly = SheetFlyersMoving(now);
+                if (leaving && open.Value < 0.03f && !moreFly) { frames.Stop(); Finish(); return; }
+                bool more = !leaving && (Animating(dt) || moreSquish || moreFly);
                 Location = new Point(Location.X, baseY + Rise());
                 Render();
                 if (open.Settled && !more) frames.Stop();
+            }
+
+            bool StepSquish(float dt)
+            {
+                if (squish.Count == 0) return false;
+                List<string> drop = null;
+                foreach (var kv in squish)
+                {
+                    bool held = pressId == kv.Key && hotId == kv.Key;
+                    if (held) { Tune(kv.Value, 520, 0.85f); kv.Value.Target = 1; }
+                    else { Tune(kv.Value, 360, 0.50f); kv.Value.Target = 0; }
+                    kv.Value.Step(dt);
+                    if (kv.Value.Settled && kv.Value.Target == 0)
+                    {
+                        if (drop == null) drop = new List<string>();
+                        drop.Add(kv.Key);
+                    }
+                }
+                if (drop != null) foreach (var k in drop) squish.Remove(k);
+                return squish.Count > 0;
+            }
+
+            protected RectangleF Squish(string id, RectangleF r, float depth = 0.06f)
+            {
+                if (Anim.Reduced || id == null) return new RectangleF(0, 0, 1, 1);
+                bool held = pressId == id && hotId == id;
+                Spring sp;
+                if (!squish.TryGetValue(id, out sp))
+                {
+                    if (!held) return new RectangleF(0, 0, 1, 1);
+                    sp = new Spring(0, 1, 1, 0.0005f);
+                    Tune(sp, 520, 0.85f);
+                    sp.Target = 1;
+                    squish[id] = sp;
+                    frames.Start();
+                }
+                float s = 1 - depth * sp.Value;
+                if (Math.Abs(s - 1) < 0.0005f) return new RectangleF(0, 0, 1, 1);
+                float cx = r.X + r.Width / 2, cy = r.Y + r.Height / 2;
+                g.TranslateTransform(cx, cy);
+                g.ScaleTransform(s, s);
+                g.TranslateTransform(-cx, -cy);
+                return new RectangleF(cx, cy, s, s);
+            }
+
+            protected void Unsquish(RectangleF r, RectangleF s)
+            {
+                if (Math.Abs(s.Width - 1) < 0.0005f) return;
+                g.TranslateTransform(s.X, s.Y);
+                g.ScaleTransform(1 / s.Width, 1 / s.Height);
+                g.TranslateTransform(-s.X, -s.Y);
+            }
+
+            bool SheetFlyersMoving(DateTime now)
+            {
+                if (sheetFlyers.Count == 0) return false;
+                if ((now - sheetFlyUtc).TotalSeconds < SheetScatterSecs + 0.1) return true;
+                ClearSheetFlyers();
+                return false;
+            }
+
+            void ClearSheetFlyers()
+            {
+                sheetFlyers.Clear();
+                foreach (var b in sheetFlyerImgs) b.Dispose();
+                sheetFlyerImgs.Clear();
+            }
+
+            protected void VanishRect(RectangleF r)
+            {
+                if (Anim.Reduced || canvas == null) return;
+                var px = Rectangle.Intersect(Rectangle.Round(new RectangleF(r.X * scale, r.Y * scale, r.Width * scale, r.Height * scale)), new Rectangle(0, 0, cw, ch));
+                if (px.Width < 8 || px.Height < 8) return;
+                var img = new Bitmap(px.Width, px.Height, PixelFormat.Format32bppPArgb);
+                using (var bg = Graphics.FromImage(img))
+                {
+                    bg.CompositingMode = CompositingMode.SourceCopy;
+                    bg.DrawImage(canvas, new Rectangle(0, 0, px.Width, px.Height), px, GraphicsUnit.Pixel);
+                }
+                sheetFlyerImgs.Add(img);
+                const int cols = 4, rows = 4;
+                float dw = r.Width / cols, dh = r.Height / rows;
+                float sw = (float)img.Width / cols, sh = (float)img.Height / rows;
+                for (int y = 0; y < rows; y++)
+                {
+                    for (int x = 0; x < cols; x++)
+                    {
+                        float nx = (x + 0.5f) / cols - 0.5f;
+                        float ny = (y + 0.5f) / rows - 0.5f;
+                        float hash = ((x * 7 + y * 13) % 9) / 9f - 0.5f;
+                        sheetFlyers.Add(new SheetFlyer
+                        {
+                            Img = img,
+                            Src = Rectangle.Round(new RectangleF(x * sw, y * sh, sw, sh)),
+                            From = new RectangleF(r.X + x * dw, r.Y + y * dh, dw, dh),
+                            Vx = nx * 165 + hash * 45,
+                            Vy = ny * 105 - 90 - Math.Abs(hash) * 45,
+                            Spin = nx * 240 + hash * 100,
+                            Delay = Math.Abs(nx) * 0.03f
+                        });
+                    }
+                }
+                sheetFlyUtc = DateTime.UtcNow;
+                frames.Start();
+            }
+
+            void DrawSheetFlyers(DateTime now)
+            {
+                if (sheetFlyers.Count == 0) return;
+                double t0 = (now - sheetFlyUtc).TotalSeconds;
+                bool alive = false;
+                var keepMode = g.InterpolationMode;
+                g.InterpolationMode = InterpolationMode.Bilinear;
+                using (var ia = new ImageAttributes())
+                {
+                    var cm = new ColorMatrix();
+                    foreach (var f in sheetFlyers)
+                    {
+                        float t = (float)((t0 - f.Delay) / SheetScatterSecs);
+                        if (t >= 1) continue;
+                        alive = true;
+                        t = Math.Max(0, t);
+                        float x = f.From.X + f.Vx * t * (float)SheetScatterSecs;
+                        float y = f.From.Y + (f.Vy * t + 360 * t * t) * (float)SheetScatterSecs;
+                        float alpha = (1 - t) * (1 - t);
+                        cm.Matrix33 = alpha;
+                        ia.SetColorMatrix(cm);
+                        var dst = new RectangleF(x, y, f.From.Width, f.From.Height);
+                        var st = g.Save();
+                        g.TranslateTransform(dst.X + dst.Width / 2, dst.Y + dst.Height / 2);
+                        g.RotateTransform(f.Spin * t);
+                        var pts = new[] { new PointF(-dst.Width / 2, -dst.Height / 2), new PointF(dst.Width / 2, -dst.Height / 2), new PointF(-dst.Width / 2, dst.Height / 2) };
+                        g.DrawImage(f.Img, pts, f.Src, GraphicsUnit.Pixel, ia);
+                        g.Restore(st);
+                    }
+                }
+                g.InterpolationMode = keepMode;
+                if (!alive) ClearSheetFlyers();
             }
 
             void TakePlate(DockPlate pl)
@@ -225,6 +377,7 @@ namespace Tepi
 
             void Free()
             {
+                ClearSheetFlyers();
                 if (g == null) return;
                 g.Dispose();
                 canvas.Dispose();
@@ -264,7 +417,7 @@ namespace Tepi
                         g.Restore(inner);
                     }
                     g.FillPath(p.B(Ink.A(Ink.Veil, glass ? 0.34f : 0.95f)), path);
-                    using (var lg = new LinearGradientBrush(new RectangleF(r.X, r.Y - 1, r.Width, 58), Color.FromArgb((int)(fade * (Ink.Light ? 80 : 22)), 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90f))
+                    using (var lg = new LinearGradientBrush(new RectangleF(r.X, r.Y - 1, r.Width, 58), Color.FromArgb((int)(fade * (Ink.Light ? 80 : 22)), p.T.Highlight), Color.FromArgb(0, p.T.Highlight), 90f))
                     {
                         // No wrap: a tiled gradient leaves a bright seam
                         lg.WrapMode = WrapMode.TileFlipXY;
@@ -272,11 +425,12 @@ namespace Tepi
                     }
                     Backdrop(r);
                     g.Restore(st);
-                    g.DrawPath(p.P(Color.FromArgb(Ink.Light ? 70 : 40, 255, 255, 255), 1f), path);
+                    g.DrawPath(p.P(Color.FromArgb(Ink.Light ? 70 : 40, p.T.Highlight), 1f), path);
                 }
                 tipText = null;
                 Draw();
                 if (tipText != null) DrawTip();
+                DrawSheetFlyers(DateTime.UtcNow);
                 p.Alpha = 1;
                 g.Flush(FlushIntention.Sync);
                 if (!IsHandleCreated) return;
@@ -319,6 +473,7 @@ namespace Tepi
             {
                 base.OnMouseMove(e);
                 if (leaving) return;
+                if (e.Button == MouseButtons.None && pressId != null) pressId = null;
                 if (pressId != null && e.Button == MouseButtons.Left && Drag(pressId, Local(e.Location))) { Render(); return; }
                 string id = HitAt(e.Location);
                 HoverMoved(id);
@@ -332,7 +487,9 @@ namespace Tepi
                 base.OnMouseLeave(e);
                 if (leaving) return;
                 hotId = null;
+                pressId = null;
                 HoverMoved(null);
+                if (squish.Count > 0) frames.Start();
                 Render();
             }
 
@@ -342,6 +499,7 @@ namespace Tepi
                 if (leaving) return;
                 pressId = HitAt(e.Location);
                 if (pressId != null && e.Button == MouseButtons.Left) Drag(pressId, Local(e.Location));
+                if (pressId != null || squish.Count > 0) frames.Start();
                 Render();
             }
 
@@ -351,6 +509,7 @@ namespace Tepi
                 if (leaving) return;
                 string id = HitAt(e.Location), was = pressId;
                 pressId = null;
+                if (squish.Count > 0) frames.Start();
                 if (id == null || id != was) { Render(); return; }
                 Clicked(id, e.Button);
                 if (!IsDisposed) Render();
@@ -396,6 +555,8 @@ namespace Tepi
 
             protected void Done() { dock.SheetDone(this); }
 
+            protected bool Down(string id) { return pressId == id && hotId == id; }
+
             // Tepi's controls, in the island's look
             // More: the label opens a list
             protected void Toggle(float cx, float cy, float d, char glyph, bool on, bool available, string label, string id, string more = null)
@@ -406,9 +567,11 @@ namespace Tepi
                 var circle = new RectangleF(cx - r, cy - r, d, d);
                 Color fill = on ? (down ? Ink.Mix(p.T.Accent, p.T.OnAccent, 0.22f) : hover ? Ink.Mix(p.T.Accent, p.T.OnAccent, 0.1f) : p.T.Accent)
                                 : down ? p.T.FillPressed : hover ? p.T.FillHover : p.T.Fill;
+                var sq = Squish(id, circle, 0.08f);
                 if (on) p.Circle(cx, cy, r, fill);
                 else p.Module(circle, r, fill);
                 p.Icon(glyph, 17f, on ? p.T.OnAccent : available ? p.T.Text : p.T.Quaternary, cx, cy);
+                Unsquish(circle, sq);
                 if (more == null || !available)
                 {
                     p.TextCenter(label, Ink.Caption, available ? p.T.Sub : p.T.Faint, cx, cy + r + 13);
@@ -467,8 +630,12 @@ namespace Tepi
             {
                 Hit(r, id);
                 if (tip != null && hotId == id) Tip(r, tip);
-                if (hotId == id) p.FillRound(r, 10, pressId == id ? p.T.FillPressed : p.T.FillHover);
+                bool down = Down(id);
+                var sq = Squish(id, r, 0.08f);
+                if (down) r.Offset(0, 0.75f);
+                if (hotId == id) p.FillRound(r, 10, down ? p.T.FillPressed : p.T.FillHover);
                 p.Icon(glyph, 15f, hotId == id ? p.T.Text : p.T.Sub, r.X + r.Width / 2, r.Y + r.Height / 2);
+                Unsquish(r, sq);
             }
 
             protected void Caption(string text, float x, float cy)

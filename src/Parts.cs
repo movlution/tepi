@@ -370,20 +370,57 @@ namespace Tepi
             if (tw > 0) p.Text(trailing, Ink.Callout, p.T.Sub, x + w, cy, tw, StringAlignment.Far);
         }
 
-        // Empty state with one action
+        // Empty state without button
+        void EmptyState(RectangleF area, char icon, string title, string line)
+        {
+            EmptyState(area, icon, title, line, null, null, null, PillKind.Secondary);
+        }
+
+        // Empty state with one action (defaults to Secondary)
         void EmptyState(RectangleF area, char icon, string title, string line, string action, string id, Action act)
         {
-            bool button = action != null && act != null;
-            float block = 48 + 16 + 20 + 22 + (button ? 18 + 32 : 0);
+            EmptyState(area, icon, title, line, action, id, act, PillKind.Secondary);
+        }
+
+        // Empty state with one action and specified PillKind
+        void EmptyState(RectangleF area, char icon, string title, string line, string action, string id, Action act, PillKind kind)
+        {
+            bool button = !string.IsNullOrEmpty(action) && act != null;
+            float block = 48 + 16 + 20 + 24 + (button ? 18 + 32 : 0);
             float top = area.Y + Math.Max(8, (area.Height - block) / 2), cx = area.X + area.Width / 2;
             var circle = new RectangleF(cx - 24, top, 48, 48);
             p.Module(circle, 24, p.T.Fill);
             p.Icon(icon, 20f, p.T.Sub, cx, top + 24);
             p.TextCenter(title, Ink.Headline, p.T.Text, cx, top + 48 + 16 + 10);
-            p.Text(line, Ink.Callout, p.T.Sub, cx, top + 48 + 16 + 20 + 11, area.Width - 48, StringAlignment.Center);
+            if (!string.IsNullOrEmpty(line))
+            {
+                var lineBox = new RectangleF(area.X + 24, top + 48 + 16 + 20 + 4, area.Width - 48, 38);
+                p.TextBox(line, Ink.Callout, p.T.Sub, lineBox, StringAlignment.Center);
+            }
             if (!button) return;
-            float bw = Math.Max(120, p.Measure(action, Ink.Semi(13f)) + 40);
-            Pill(new RectangleF(cx - bw / 2, top + block - 32, bw, 32), id, action, PillKind.Secondary, act);
+            float bw = Math.Max(120, p.Measure(action, Ink.Callout) + 40);
+            Pill(new RectangleF(cx - bw / 2, top + block - 32, bw, 32), id, action, kind, act);
+        }
+
+        // Empty state with dual action buttons
+        void EmptyState(RectangleF area, char icon, string title, string line,
+            string action1, string id1, Action act1, PillKind kind1,
+            string action2, string id2, Action act2, PillKind kind2)
+        {
+            float block = 48 + 16 + 20 + 24 + 18 + 32;
+            float top = area.Y + Math.Max(8, (area.Height - block) / 2), cx = area.X + area.Width / 2;
+            var circle = new RectangleF(cx - 24, top, 48, 48);
+            p.Module(circle, 24, p.T.Fill);
+            p.Icon(icon, 20f, p.T.Sub, cx, top + 24);
+            p.TextCenter(title, Ink.Headline, p.T.Text, cx, top + 48 + 16 + 10);
+            if (!string.IsNullOrEmpty(line))
+            {
+                var lineBox = new RectangleF(area.X + 24, top + 48 + 16 + 20 + 4, area.Width - 48, 38);
+                p.TextBox(line, Ink.Callout, p.T.Sub, lineBox, StringAlignment.Center);
+            }
+            float bw = 136, gap = 12;
+            Pill(new RectangleF(cx - bw - gap / 2, top + block - 32, bw, 32), id1, action1, kind1, act1);
+            Pill(new RectangleF(cx + gap / 2, top + block - 32, bw, 32), id2, action2, kind2, act2);
         }
 
         // Progress ring from 12 o'clock

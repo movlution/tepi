@@ -134,7 +134,8 @@ namespace Tepi
                 ShowInTaskbar = false;
                 TopMost = true;
                 StartPosition = FormStartPosition.Manual;
-                BackColor = Color.FromArgb(18, 18, 18);
+                BackColor = KitInk.Window;
+                ForeColor = KitInk.Text;
                 SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
                 Size = new Size(Grab * Zoom + Pad * 2, Grab * Zoom + Pad * 2 + TextH);
             }
@@ -155,6 +156,7 @@ namespace Tepi
             protected override void OnHandleCreated(EventArgs e)
             {
                 base.OnHandleCreated(e);
+                Native.RoundCorners(Handle);
                 SetWindowDisplayAffinity(Handle, WdaExclude);
             }
 
@@ -176,19 +178,32 @@ namespace Tepi
             protected override void OnPaint(PaintEventArgs e)
             {
                 var g = e.Graphics;
-                g.Clear(BackColor);
+                KitInk.Smooth(g);
+                g.Clear(KitInk.Window);
                 if (view == null) return;
                 int side = Grab * Zoom;
                 g.InterpolationMode = InterpolationMode.NearestNeighbor;
                 g.PixelOffsetMode = PixelOffsetMode.Half;
                 g.DrawImage(view, new Rectangle(Pad, Pad, side, side));
+
+                // Dual-stroke high-contrast reticle: outer dark stroke + inner light stroke
                 int mid = Pad + (Grab / 2) * Zoom;
-                using (var pen = new Pen(Color.White, 2)) g.DrawRectangle(pen, mid, mid, Zoom, Zoom);
+                using (var darkPen = new Pen(Color.FromArgb(160, 0, 0, 0), 1f))
+                    g.DrawRectangle(darkPen, mid - 1, mid - 1, Zoom + 2, Zoom + 2);
+                using (var lightPen = new Pen(Color.White, 1.5f))
+                    g.DrawRectangle(lightPen, mid, mid, Zoom, Zoom);
+
+                // Swatch with theme-aware border
                 using (var sw = new SolidBrush(color)) g.FillRectangle(sw, Pad, Pad + side + 7, 14, 14);
-                // Dark picks stay visible on the dark loupe
-                using (var edge = new Pen(Color.FromArgb(120, 255, 255, 255))) g.DrawRectangle(edge, Pad, Pad + side + 7, 14, 14);
-                using (var f = new Font("Segoe UI Semibold", 10f, GraphicsUnit.Point))
-                    TextRenderer.DrawText(g, Island.HexOf(color), f, new Point(Pad + 20, Pad + side + 5), Color.White);
+                using (var edge = new Pen(KitInk.Line, 1f)) g.DrawRectangle(edge, Pad, Pad + side + 7, 14, 14);
+
+                // Type scale token and theme-aware text
+                var f = Ink.Semi(13f);
+                TextRenderer.DrawText(g, Island.HexOf(color), f, new Point(Pad + 20, Pad + side + 5), KitInk.Text);
+
+                // Subtle outline around borderless loupe window
+                using (var border = new Pen(KitInk.Line, 1f))
+                    g.DrawRectangle(border, 0, 0, Width - 1, Height - 1);
             }
 
             protected override void Dispose(bool disposing)

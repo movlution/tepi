@@ -65,32 +65,72 @@ namespace Tepi
             Kick();
         }
 
+        public static Color EnforceContrast(Color c, Color bg, double minContrast)
+        {
+            if (Contrast(c, bg) >= minContrast) return c;
+            Color white = Color.FromArgb(255, 255, 255, 255);
+            Color dark = Color.FromArgb(255, 0, 0, 0);
+            Color target = Contrast(white, bg) >= Contrast(dark, bg) ? white : dark;
+            Color res = c;
+            for (int i = 0; i < 24 && Contrast(res, bg) < minContrast; i++)
+                res = MixRound(res, target, 0.15);
+            if (Contrast(res, bg) < minContrast && Contrast(target, bg) > Contrast(res, bg))
+                res = target;
+            return res;
+        }
+
         // Same maths as derive() in pack.js
         public static Dictionary<string, string> DerivePalette(Color bg, Color text, Color accent)
         {
             var white = Color.White;
+            var dark = Color.FromArgb(255, 0, 0, 0);
             var d = new Dictionary<string, string>();
+
+            // 1. Enforce Primary Text Floor (min 7.0:1 so sub and faint have headroom, fallback >= 4.5)
+            text = EnforceContrast(text, bg, 7.0);
+            if (Contrast(text, bg) < 4.5) text = EnforceContrast(text, bg, 4.5);
+
+            // 2. Derive and enforce Sub (>= 4.5:1) and Faint (>= 3.0:1)
+            Color sub = EnforceContrast(MixRound(text, bg, 0.24), bg, 4.5);
+            Color faint = EnforceContrast(MixRound(text, bg, 0.44), bg, 3.0);
+
+            // 3. Enforce Accent Floor (>= 3.5:1 against bg)
+            accent = EnforceContrast(accent, bg, 3.5);
+
+            // 4. OnAccent contrast guarantee (>= 4.5:1)
+            Color onAccent = Contrast(white, accent) >= Contrast(dark, accent) ? white : dark;
+            onAccent = EnforceContrast(onAccent, accent, 4.5);
+
             d["bg"] = HexOf(bg);
             d["text"] = HexOf(text);
             d["accent"] = d["progress"] = HexOf(accent);
-            d["sub"] = HexOf(MixRound(text, bg, 0.24));
-            d["faint"] = HexOf(MixRound(text, bg, 0.44));
+            d["sub"] = HexOf(sub);
+            d["faint"] = HexOf(faint);
             var tint = MixRound(accent, white, 0.2);
             d["fill"] = AlphaHex(tint, 0x2E);
             d["fillHover"] = AlphaHex(tint, 0x4A);
             d["line"] = AlphaHex(tint, 0x3A);
-            d["onAccent"] = HexOf(Contrast(bg, accent) >= Contrast(white, accent) ? bg : white);
-            Color cbg = text, ca = accent;
-            for (int i = 0; i < 14 && Contrast(ca, cbg) < 4.5; i++) ca = MixRound(ca, bg, 0.22);
+            d["onAccent"] = HexOf(onAccent);
+
+            // 5. Card Palette Derivation with Symmetric Floors
+            Color cbg = text;
+            Color ctext = EnforceContrast(bg, cbg, 7.0);
+            if (Contrast(ctext, cbg) < 4.5) ctext = EnforceContrast(ctext, cbg, 4.5);
+            Color csub = EnforceContrast(MixRound(ctext, cbg, 0.24), cbg, 4.5);
+            Color cfaint = EnforceContrast(MixRound(ctext, cbg, 0.44), cbg, 3.0);
+            Color ca = EnforceContrast(accent, cbg, 3.5);
+            Color conAccent = Contrast(white, ca) >= Contrast(dark, ca) ? white : dark;
+            conAccent = EnforceContrast(conAccent, ca, 4.5);
+
             d["card.bg"] = HexOf(cbg);
-            d["card.text"] = HexOf(bg);
-            d["card.sub"] = HexOf(MixRound(bg, cbg, 0.3));
-            d["card.faint"] = HexOf(MixRound(bg, cbg, 0.48));
+            d["card.text"] = HexOf(ctext);
+            d["card.sub"] = HexOf(csub);
+            d["card.faint"] = HexOf(cfaint);
             d["card.accent"] = HexOf(ca);
             d["card.fill"] = AlphaHex(ca, 0x1E);
             d["card.fillHover"] = AlphaHex(ca, 0x35);
             d["card.line"] = AlphaHex(ca, 0x30);
-            d["card.onAccent"] = HexOf(Contrast(white, ca) >= 4.5 ? white : bg);
+            d["card.onAccent"] = HexOf(conAccent);
             return d;
         }
 

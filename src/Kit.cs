@@ -24,8 +24,8 @@ namespace Tepi
         public static Color Raised { get { return Ink.Light ? Color.White : O(Ink.Mix(Ink.Base.Bg, Ink.Base.Text, 0.3f)); } }
         public static Color Text { get { return O(Ink.Base.Text); } }
         public static Color Sub { get { return O(Ink.Mix(Ink.Base.Bg, Ink.Base.Text, 0.62f)); } }
-        // 0.57 keeps settings-window metadata above 4.5:1 (0.38 measured ~2.5-3.3:1)
-        public static Color Faint { get { return O(Ink.Mix(Ink.Base.Bg, Ink.Base.Text, 0.57f)); } }
+        // 0.65 in light mode guarantees >= 4.5:1 across Window, Side, Group, Hover, and Line
+        public static Color Faint { get { return O(Ink.Mix(Ink.Base.Bg, Ink.Base.Text, Ink.Light ? 0.65f : 0.57f)); } }
         // Disabled chrome (switch knob, slider fill): dimmer than tertiary text so
         // raising Faint for readability does not make disabled controls look enabled
         public static Color Disabled { get { return O(Ink.Mix(Ink.Base.Bg, Ink.Base.Text, 0.30f)); } }
@@ -167,6 +167,9 @@ namespace Tepi
     // iOS switch over CheckBox for readers
     class KitSwitch : CheckBox
     {
+        bool hovered;
+        protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); hovered = true; Invalidate(); }
+        protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); hovered = false; Invalidate(); }
         protected override void OnMouseDown(MouseEventArgs e) { KitInk.ByMouse = true; base.OnMouseDown(e); }
         protected override void OnKeyUp(KeyEventArgs e) { if (KitInk.ByMouse) { KitInk.ByMouse = false; Invalidate(); } base.OnKeyUp(e); }
 
@@ -197,11 +200,17 @@ namespace Tepi
             g.Clear(KitInk.Under(this));
             float s = Height / 24f;
             var track = new RectangleF(1, (Height - 22 * s) / 2, 40 * s, 22 * s);
+            Color trackBg = Enabled ? Ink.Mix(KitInk.Line, KitInk.Accent, knob) : KitInk.Line;
+            if (hovered && Enabled) trackBg = Ink.Mix(trackBg, KitInk.Text, 0.06f);
             using (var path = Ink.Round(track, 11 * s))
-            using (var b = new SolidBrush(Enabled ? Ink.Mix(KitInk.Line, KitInk.Accent, knob) : KitInk.Line)) g.FillPath(b, path);
-            float r = 9 * s;
+            using (var b = new SolidBrush(trackBg)) g.FillPath(b, path);
+
+            float r = (hovered && Enabled ? 9.5f : 9f) * s;
             float cx = track.X + 11 * s + knob * 18 * s, cy = track.Y + 11 * s;
-            using (var b = new SolidBrush(Enabled ? Ink.Mix(KitInk.Text, KitInk.OnAccent, knob) : KitInk.Disabled)) g.FillEllipse(b, cx - r, cy - r, r * 2, r * 2);
+            Color knobColor = Enabled ? Ink.Mix(KitInk.Text, KitInk.OnAccent, knob) : KitInk.Disabled;
+            if (hovered && Enabled && knob == 0) knobColor = Ink.Mix(knobColor, KitInk.Window, 0.08f);
+            using (var b = new SolidBrush(knobColor)) g.FillEllipse(b, cx - r, cy - r, r * 2, r * 2);
+
             if (Focused && ShowFocusCues && !KitInk.ByMouse)
             {
                 var ring = KitControl.Inside(RectangleF.Inflate(track, 2, 2), Width, Height);
@@ -307,6 +316,161 @@ namespace Tepi
         }
     }
 
+    // Curated accent swatch picker ala macOS System Settings
+    class KitPalette : KitControl
+    {
+        public string[][] Presets = new string[0][];
+        public string[][] PresetsLight = new string[0][];
+        int selected = -1;
+        int hovered = -1;
+        public event Action<int, string> Picked;
+
+        public KitPalette()
+        {
+            SetStyle(ControlStyles.Selectable | ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            TabStop = true;
+            Cursor = Cursors.Hand;
+        }
+
+        public int SelectedIndex
+        {
+            get { return selected; }
+            set { if (selected == value) return; selected = value; Invalidate(); }
+        }
+
+        public string SelectedHex
+        {
+            get { return selected >= 0 && selected < Presets.Length ? Presets[selected][1] : ""; }
+            set
+            {
+                selected = -1;
+                for (int i = 0; i < Presets.Length; i++)
+                {
+                    if (Presets[i][1] == value || (PresetsLight != null && i < PresetsLight.Length && PresetsLight[i][1] == value))
+                    {
+                        selected = i;
+                        break;
+                    }
+                }
+                Invalidate();
+            }
+        }
+
+        float ItemStep { get { return Presets.Length > 0 ? Math.Min(30f * Ui, (Width - 4f * Ui) / Presets.Length) : 30f * Ui; } }
+
+        PointF Center(int i)
+        {
+            float step = ItemStep;
+            float totalW = step * Presets.Length;
+            float startX = (Width - totalW) / 2f + step / 2f;
+            return new PointF(startX + i * step, Height / 2f);
+        }
+
+        int HitTest(Point pt)
+        {
+            float r = 12f * Ui;
+            for (int i = 0; i < Presets.Length; i++)
+            {
+                var c = Center(i);
+                float dx = pt.X - c.X, dy = pt.Y - c.Y;
+                if (dx * dx + dy * dy <= r * r) return i;
+            }
+            return -1;
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            int hit = HitTest(e.Location);
+            if (hit != hovered) { hovered = hit; Invalidate(); }
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            hovered = -1;
+            Invalidate();
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+            if (e.Button == MouseButtons.Left)
+            {
+                int hit = HitTest(e.Location);
+                if (hit >= 0) Pick(hit);
+            }
+        }
+
+        void Pick(int i)
+        {
+            if (i < 0 || i >= Presets.Length) return;
+            selected = i;
+            Invalidate();
+            var table = Ink.Light && PresetsLight != null && PresetsLight.Length == Presets.Length ? PresetsLight : Presets;
+            var h = Picked;
+            if (h != null) h(i, table[i][1]);
+        }
+
+        protected override bool IsInputKey(Keys key) { return key == Keys.Left || key == Keys.Right || base.IsInputKey(key); }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            if (e.KeyCode == Keys.Left) Pick(Math.Max(0, (selected >= 0 ? selected : 0) - 1));
+            else if (e.KeyCode == Keys.Right) Pick(Math.Min(Presets.Length - 1, (selected >= 0 ? selected : 0) + 1));
+            else if (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter) { if (selected >= 0) Pick(selected); }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            KitInk.Smooth(g);
+            g.Clear(KitInk.Under(this));
+            var table = Ink.Light && PresetsLight != null && PresetsLight.Length == Presets.Length ? PresetsLight : Presets;
+            float r = 7.5f * Ui;
+
+            for (int i = 0; i < Presets.Length; i++)
+            {
+                var pt = Center(i);
+                Color dotColor;
+                string hex = table[i][1];
+                if (string.IsNullOrEmpty(hex))
+                {
+                    dotColor = Ink.Light ? Color.FromArgb(255, 142, 142, 147) : Color.FromArgb(255, 160, 160, 165);
+                }
+                else
+                {
+                    try { dotColor = ColorTranslator.FromHtml(hex); }
+                    catch { dotColor = KitInk.Text; }
+                }
+
+                if (i == selected)
+                {
+                    float ringR = r + 3.5f * Ui;
+                    using (var pen = new Pen(dotColor, 2f * Ui))
+                        g.DrawEllipse(pen, pt.X - ringR, pt.Y - ringR, ringR * 2, ringR * 2);
+                }
+                else if (i == hovered)
+                {
+                    float ringR = r + 3f * Ui;
+                    using (var pen = new Pen(Color.FromArgb(90, dotColor), 1.5f * Ui))
+                        g.DrawEllipse(pen, pt.X - ringR, pt.Y - ringR, ringR * 2, ringR * 2);
+                }
+
+                using (var b = new SolidBrush(dotColor))
+                    g.FillEllipse(b, pt.X - r, pt.Y - r, r * 2, r * 2);
+            }
+
+            if (Focused && ShowFocusCues && !KitInk.ByMouse)
+            {
+                var ring = KitControl.Inside(new RectangleF(0, 0, Width, Height), Width, Height);
+                using (var path = Ink.Round(ring, 8 * Ui))
+                using (var pen = new Pen(KitInk.Text, 1.5f)) g.DrawPath(pen, path);
+            }
+        }
+    }
+
     // Slider: arrows, Home/End, drag
     class KitSlider : KitControl
     {
@@ -358,9 +522,9 @@ namespace Tepi
             var t = Track;
             Fill(g, t, t.Height / 2, KitInk.Line);
             Fill(g, new RectangleF(t.X, t.Y, Math.Max(t.Height, t.Width * f), t.Height), t.Height / 2, Enabled ? KitInk.Text : KitInk.Disabled);
-            float r = (dragging || Hovered ? 9 : 8) * s, cx = t.X + t.Width * f, cy = t.Y + t.Height / 2;
-            using (var b = new SolidBrush(KitInk.Text)) g.FillEllipse(b, cx - r, cy - r, r * 2, r * 2);
-            using (var pen = new Pen(KitInk.Line, 1f)) g.DrawEllipse(pen, cx - r, cy - r, r * 2, r * 2);
+            float r = ((dragging || Hovered) && Enabled ? 9 : 8) * s, cx = t.X + t.Width * f, cy = t.Y + t.Height / 2;
+            using (var b = new SolidBrush(Enabled ? KitInk.Text : KitInk.Disabled)) g.FillEllipse(b, cx - r, cy - r, r * 2, r * 2);
+            using (var pen = new Pen(Enabled ? KitInk.Line : KitInk.Disabled, 1f)) g.DrawEllipse(pen, cx - r, cy - r, r * 2, r * 2);
             if (ShowValue)
                 using (var f2 = new Font(Ink.MenuFamily, 12f * s, GraphicsUnit.Pixel))
                     TextRenderer.DrawText(g, Format(Value), f2, new Rectangle(0, 0, (int)LabelW, Height), Enabled ? KitInk.Sub : KitInk.Faint,
@@ -383,7 +547,7 @@ namespace Tepi
     class KitButton : Button
     {
         public bool Primary;
-        bool hovered;
+        bool hovered, pressed;
 
         public KitButton()
         {
@@ -395,9 +559,25 @@ namespace Tepi
         }
 
         protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); hovered = true; Invalidate(); }
-        protected override void OnMouseDown(MouseEventArgs e) { KitInk.ByMouse = true; base.OnMouseDown(e); }
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            KitInk.ByMouse = true;
+            if (e.Button == MouseButtons.Left) { pressed = true; Invalidate(); }
+            base.OnMouseDown(e);
+        }
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+            if (pressed) { pressed = false; Invalidate(); }
+        }
         protected override void OnKeyUp(KeyEventArgs e) { if (KitInk.ByMouse) { KitInk.ByMouse = false; Invalidate(); } base.OnKeyUp(e); }
-        protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); hovered = false; Invalidate(); }
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            hovered = false;
+            if (pressed) { pressed = false; }
+            Invalidate();
+        }
 
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -405,18 +585,42 @@ namespace Tepi
             KitInk.Smooth(g);
             g.Clear(KitInk.Under(this));
             bool ringOn = Focused && ShowFocusCues && !KitInk.ByMouse;
+            var kw = FindForm() as KitWindow;
+            float s = kw != null ? kw.Ui : (Height > 0 ? Height / 32f : 1f);
+            if (s <= 0) s = 1f;
+
             // Focused pill shrinks so its ring fits
-            var r = ringOn ? new RectangleF(3.5f, 3.5f, Width - 7, Height - 7) : new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
-            Color bg = Primary ? (hovered ? Ink.Mix(KitInk.Text, KitInk.Window, 0.15f) : KitInk.Text) : (hovered ? KitInk.Hover : KitInk.Line);
-            if (!Enabled) bg = KitInk.Line;
+            var r = ringOn ? new RectangleF(3.5f * s, 3.5f * s, Width - 7 * s, Height - 7 * s) : new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
+            Color bg;
+            if (!Enabled)
+            {
+                bg = KitInk.Line;
+            }
+            else if (Primary)
+            {
+                bg = pressed ? (Ink.Light ? Color.FromArgb(255, 0, 0, 0) : Ink.Mix(KitInk.Text, KitInk.Window, 0.30f))
+                             : (hovered ? Ink.Mix(KitInk.Text, KitInk.Window, 0.15f) : KitInk.Text);
+            }
+            else
+            {
+                bg = pressed ? (Ink.Light ? Ink.Mix(Ink.Base.Bg, Ink.Base.Text, 0.20f) : Ink.Mix(Ink.Base.Bg, Ink.Base.Text, 0.25f))
+                             : (hovered ? KitInk.Hover : KitInk.Line);
+            }
+
+            if (pressed && Enabled) r.Offset(0, 0.75f * s);
+
             using (var path = Ink.Round(r, r.Height / 2f))
             using (var b = new SolidBrush(bg)) g.FillPath(b, path);
+
             KitInk.Draw(g, Text, Font, !Enabled ? KitInk.Faint : Primary ? KitInk.Window : KitInk.Text, r, ContentAlignment.MiddleCenter);
             if (ringOn)
             {
                 var ring = new RectangleF(1, 1, Width - 2.5f, Height - 2.5f);
+                Color ringColor = KitInk.Accent;
+                if (Island.Contrast(ringColor, bg) < 3.0 || (Primary && (ringColor == KitInk.Text || ringColor == bg)))
+                    ringColor = Ink.Light ? Color.FromArgb(255, 22, 104, 232) : Color.FromArgb(255, 59, 130, 246);
                 using (var path = Ink.Round(ring, ring.Height / 2f))
-                using (var pen = new Pen(KitInk.Text, 1.6f)) g.DrawPath(pen, path);
+                using (var pen = new Pen(ringColor, 1.8f)) g.DrawPath(pen, path);
             }
         }
     }
@@ -584,8 +788,11 @@ namespace Tepi
             if (Glyph == MarkGlyph)
             {
                 var pill = new RectangleF(tile.X + 5 * s, tile.Y + 10 * s, 20 * s, 10 * s);
-                using (var p2 = Ink.Round(pill, 5 * s)) g.FillPath(Brushes.Black, p2);
-                using (var dot = new SolidBrush(KitInk.Text)) g.FillEllipse(dot, pill.Right - 8 * s, pill.Y + 2.5f * s, 5 * s, 5 * s);
+                using (var p2 = Ink.Round(pill, 5 * s))
+                using (var pb = new SolidBrush(KitInk.Text))
+                    g.FillPath(pb, p2);
+                using (var dot = new SolidBrush(KitInk.Window))
+                    g.FillEllipse(dot, pill.Right - 8 * s, pill.Y + 2.5f * s, 5 * s, 5 * s);
                 return;
             }
             using (var icons = new Font(Ink.IconFamily, 15f * s, GraphicsUnit.Pixel))
@@ -616,6 +823,8 @@ namespace Tepi
 
         [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr hwnd);
 
+        static readonly List<WeakReference> openWindows = new List<WeakReference>();
+
         public KitWindow()
         {
             AutoScaleMode = AutoScaleMode.None;
@@ -624,6 +833,83 @@ namespace Tepi
             KeyPreview = true;
             ShowInTaskbar = true;
             if (AppIcon != null) Icon = AppIcon;
+            lock (openWindows) openWindows.Add(new WeakReference(this));
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            base.OnClosed(e);
+            lock (openWindows)
+            {
+                for (int i = openWindows.Count - 1; i >= 0; i--)
+                {
+                    if (openWindows[i].Target == this) openWindows.RemoveAt(i);
+                }
+            }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                lock (openWindows)
+                {
+                    for (int i = openWindows.Count - 1; i >= 0; i--)
+                    {
+                        if (openWindows[i].Target == this) openWindows.RemoveAt(i);
+                    }
+                }
+            }
+            base.Dispose(disposing);
+        }
+
+        public static void BroadcastThemeChange()
+        {
+            var targets = new List<KitWindow>();
+            lock (openWindows)
+            {
+                for (int i = openWindows.Count - 1; i >= 0; i--)
+                {
+                    var target = openWindows[i].Target as KitWindow;
+                    if (target == null || target.IsDisposed)
+                        openWindows.RemoveAt(i);
+                    else if (!targets.Contains(target))
+                        targets.Add(target);
+                }
+            }
+            foreach (Form f in Application.OpenForms)
+            {
+                var kw = f as KitWindow;
+                if (kw != null && !kw.IsDisposed && !targets.Contains(kw))
+                    targets.Add(kw);
+            }
+            foreach (var w in targets)
+            {
+                if (w.IsDisposed) continue;
+                Action act = () =>
+                {
+                    if (w.IsDisposed) return;
+                    if (w.IsHandleCreated) Native.DarkFrame(w.Handle, !Ink.Light);
+                    w.BackColor = KitInk.Window;
+                    w.ForeColor = KitInk.Text;
+                    w.Relayout();
+                    RefreshTree(w);
+                    w.Invalidate(true);
+                };
+                if (w.InvokeRequired) w.BeginInvoke(act);
+                else act();
+            }
+        }
+
+        static void RefreshTree(Control parent)
+        {
+            if (parent is KitGroup) parent.BackColor = KitInk.Group;
+            foreach (Control c in parent.Controls)
+            {
+                if (c is KitGroup) c.BackColor = KitInk.Group;
+                c.Invalidate();
+                RefreshTree(c);
+            }
         }
 
         // Tepi's mark on every window
@@ -720,30 +1006,36 @@ namespace Tepi
         Font uiFont;
 
         // Esc and the close box mean no; only an explicit confirm proceeds
-        public static bool Confirm(Form owner, string message, string confirm = "Hapus", string dismiss = "Batal")
+        public static bool Confirm(Form owner, string message, string confirm = "Hapus", string dismiss = "Batal", string title = null)
         {
-            using (var d = new KitAsk(message, true, confirm, dismiss))
+            using (var d = new KitAsk(message, true, confirm, dismiss, title))
                 return d.ShowDialog(owner ?? Form.ActiveForm) == DialogResult.Yes;
         }
 
-        public static void Notice(Form owner, string message)
+        public static void Notice(Form owner, string message, string title = null, string close = "Tutup")
         {
-            using (var d = new KitAsk(message, false, "", ""))
+            using (var d = new KitAsk(message, false, "", "", title, close))
                 d.ShowDialog(owner ?? Form.ActiveForm);
         }
 
         KitAsk(string message, bool question, string confirm, string dismiss)
+            : this(message, question, confirm, dismiss, null, "Tutup")
+        {
+        }
+
+        KitAsk(string message, bool question, string confirm, string dismiss, string title, string close = "Tutup")
         {
             two = question;
-            Text = "Tugas dan catatan";
+            Text = string.IsNullOrEmpty(title) ? Lang.T(question ? "Konfirmasi" : "Pemberitahuan") : title;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
             ShowInTaskbar = false;
             text.Text = message;
             text.AccessibleName = message;
-            yes.Text = confirm;
-            no.Text = dismiss;
+            yes.Text = Lang.T(string.IsNullOrEmpty(confirm) ? "Ya" : confirm);
+            no.Text = Lang.T(string.IsNullOrEmpty(dismiss) ? "Batal" : dismiss);
+            ok.Text = Lang.T(string.IsNullOrEmpty(close) ? "Tutup" : close);
             yes.Click += delegate { DialogResult = DialogResult.Yes; Close(); };
             no.Click += delegate { DialogResult = DialogResult.No; Close(); };
             ok.Click += delegate { DialogResult = DialogResult.OK; Close(); };

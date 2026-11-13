@@ -115,33 +115,61 @@ namespace Tepi
         {
             if (!ClipsOn)
             {
-                float by = Empty(w, '', Lang.T("Riwayat clipboard mati"), Lang.T("Teks yang disalin hanya disimpan di memori dan hilang saat Tepi ditutup"));
-                Button(new RectangleF(w / 2 - 74, by, 148, 34), "clipsOn", Lang.T("Nyalakan"), true, delegate { SetFlag("clipboard", true); });
+                EmptyState(new RectangleF(0, PanelTop, w, h - PanelTop), '', Lang.T("Riwayat clipboard mati"), Lang.T("Teks yang disalin hanya disimpan di memori dan hilang saat Tepi ditutup"), Lang.T("Nyalakan"), "clipsOn", delegate { SetFlag("clipboard", true); }, PillKind.Primary);
                 return;
             }
             if (clips.Count == 0)
             {
-                Empty(w, '', Lang.T("Belum ada yang disalin"), Lang.T("Teks yang kamu salin muncul di sini"));
+                EmptyState(new RectangleF(0, PanelTop, w, h - PanelTop), '', Lang.T("Belum ada yang disalin"), Lang.T("Teks yang kamu salin muncul di sini"));
                 return;
             }
             var area = new RectangleF(10, PanelTop + 4, w - 20, h - PanelTop - 14);
             var st = g.Save();
             g.IntersectClip(area);
-            float y = area.Y - clipScroll.Value;
+            float y = area.Y - clipScroll.Value, keep = p.Alpha;
             for (int i = 0; i < clips.Count; i++, y += ClipRowH)
             {
-                if (y + ClipRowH < area.Top || y > area.Bottom) continue;
+                float dy, a = RowIn(i, now, out dy);
+                float ry = y + CollapseAt("clip", i) + dy;
+                if (ry + ClipRowH < area.Top || ry > area.Bottom) continue;
+                p.Alpha = keep * a;
                 var c = clips[i];
-                var row = new RectangleF(area.X + 4, y + 2, area.Width - 8, ClipRowH - 4);
-                string id = "clip" + c.Utc.Ticks;
-                if (Hover(id)) p.FillRound(row, 14, p.T.Fill);
+                var row = new RectangleF(area.X + 4, ry + 2, area.Width - 8, ClipRowH - 4);
+                string id = "clip" + c.Utc.Ticks, del = "clipDel" + c.Utc.Ticks;
+                bool hover = Hover(id) || Hover(del);
+                if (hover) p.FillRound(row, Ink.RadiusControl, p.T.Fill);
                 float rcy = row.Y + row.Height / 2;
-                p.Text(Preview(c.Text, 140), Ink.Semi(12.5f), p.T.Text, row.X + 14, rcy - 8, row.Width - 28, StringAlignment.Near);
+                float tw = hover ? row.Width - 62 : row.Width - 28;
+                p.Text(Preview(c.Text, 140), Ink.Semi(12.5f), p.T.Text, row.X + 14, rcy - 8, tw, StringAlignment.Near);
                 string meta = Lang.F("{0} karakter", c.Text.Length) + " · " + Fmt.Ago(c.Utc);
-                p.Text(meta, Ink.Small(11f), p.T.Faint, row.X + 14, rcy + 9, row.Width - 28, StringAlignment.Near);
+                p.Text(meta, Ink.Small(11f), p.T.Faint, row.X + 14, rcy + 9, tw, StringAlignment.Near);
+                var x = new RectangleF(row.Right - 36, rcy - 14, 28, 28);
+                if (hover)
+                {
+                    p.Circle(x.X + 14, x.Y + 14, 12, Hover(del) ? p.T.FillHover : p.T.Fill);
+                    p.Cross(x.X + 14, x.Y + 14, 10, p.T.Sub);
+                }
                 var pick = c;
-                if (row.Top >= area.Top && row.Bottom <= area.Bottom) AddHit(row, id, delegate { CopyClip(pick); });
+                var pickRow = row;
+                int idx = i;
+                if (row.Top >= area.Top && row.Bottom <= area.Bottom)
+                {
+                    AddHit(row, id, delegate
+                    {
+                        var tc = CanvasRect(new RectangleF(w / 2, 16, 0, 0));
+                        VanishTo(new[] { CanvasRect(pickRow) }, new PointF(tc.X, tc.Y), false);
+                        CopyClip(pick);
+                    });
+                    AddHit(x, del, delegate
+                    {
+                        Vanish(new[] { CanvasRect(pickRow) }, false);
+                        Collapse("clip", idx, ClipRowH);
+                        clips.Remove(pick);
+                        Kick();
+                    });
+                }
             }
+            p.Alpha = keep;
             g.Restore(st);
         }
     }

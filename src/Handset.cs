@@ -269,8 +269,7 @@ namespace Tepi
         {
             if (!PhonePaired)
             {
-                float by = Empty(w, IcoPhone, Lang.T("HP belum tersambung"), Lang.T("Tepi di Android, satu Wi-Fi dengan laptop"));
-                Button(new RectangleF(w / 2 - 70, by, 140, 34), "phoneLink", Lang.T("Hubungkan"), false, delegate { OpenPrefs("phone"); });
+                EmptyState(new RectangleF(0, PanelTop, w, h - PanelTop), IcoPhone, Lang.T("HP belum tersambung"), Lang.T("Tepi di Android, satu Wi-Fi dengan laptop"), Lang.T("Hubungkan"), "phoneLink", delegate { OpenPrefs("phone"); }, PillKind.Secondary);
                 return;
             }
             float x0 = Ink.ModuleInset, full = w - 2 * x0, y = PanelTop + 2, keep = p.Alpha, dy;

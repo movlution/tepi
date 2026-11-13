@@ -340,6 +340,7 @@ namespace Tepi
                     var app = apps.Find(a => a.Wins.Exists(w => w.H == h));
                     if (app == null || !Visible) return false;
                     r = IconScreenRect(app);
+                    if (!r.IsEmpty) { app.GulpUtc = DateTime.UtcNow; Animate(); }
                 }
                 if (r.IsEmpty) return false;
                 int off = IntPtr.Size;
@@ -427,10 +428,22 @@ namespace Tepi
                 return sb.ToString();
             }
 
+            public void PulseLaunchedApp(string target, string appId)
+            {
+                var app = apps.Find(a =>
+                    (target != null && target.Length > 0 && string.Equals(a.Target, target, StringComparison.OrdinalIgnoreCase)) ||
+                    (appId != null && appId.Length > 0 && string.Equals(a.AppId, appId, StringComparison.OrdinalIgnoreCase)));
+                if (app == null) return;
+                app.LaunchUtc = DateTime.UtcNow;
+                if (app.Hop < 0) { app.Hop = 0; app.Hops = Anim.Reduced ? 1 : 2; }
+                Animate();
+            }
+
             bool Moving()
             {
-                if (!reveal.Settled || !hover.Settled || !workDot.Settled || WidgetsMoving()) return true;
-                foreach (var a in apps) if (!a.Show.Settled || !a.Grow.Settled || !a.Dot.Settled || a.Hop >= 0) return true;
+                var now = DateTime.UtcNow;
+                if (!reveal.Settled || !hover.Settled || !workDot.Settled || WidgetsMoving() || DockFlyersMoving(now)) return true;
+                foreach (var a in apps) if (!a.Show.Settled || !a.Grow.Settled || !a.Dot.Settled || a.Hop >= 0 || AppAnimMoving(a, now)) return true;
                 return false;
             }
 
