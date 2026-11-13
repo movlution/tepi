@@ -122,6 +122,7 @@ namespace Tepi
                 case View.Deadline:
                 case View.Pray:
                 case View.Dictate:
+                case View.Combo:
                 case View.ShelfDrop: return true;
             }
             return false;

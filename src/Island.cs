@@ -13,7 +13,7 @@ using WinTimer = System.Windows.Forms.Timer;
 
 namespace Tepi
 {
-    enum View { Idle, Media, Lyric, Track, Agent, Approve, Done, Notif, Volume, Power, Network, Privacy, Info, Task, Deadline, Timer, Prompter, Class, Download, Brightness, AudioDevice, ShelfDrop, Pray, Remind, Locks, Shot, Mic, Drive, Run, Meet, Mirror, Convert, Otp, Dictate, Record, Mini, Panel }
+    enum View { Idle, Media, Lyric, Track, Agent, Approve, Done, Notif, Volume, Power, Network, Privacy, Info, Task, Deadline, Timer, Prompter, Class, Download, Brightness, AudioDevice, ShelfDrop, Pray, Remind, Locks, Shot, Mic, Drive, Run, Meet, Mirror, Convert, Otp, Dictate, Record, Combo, Mini, Panel }
 
     class Toast
     {
@@ -188,7 +188,8 @@ namespace Tepi
             bool now = locked || screenOff;
             if (now == dormant) return;
             dormant = now;
-            if (!now) NudgeFrost();
+            if (now) ResetCombo();
+            else NudgeFrost();
             Kick();
         }
 
@@ -216,6 +217,7 @@ namespace Tepi
             ApplyNotifLists();
             StartFeeds();
             StartLocks();
+            StartCombo();
             StartMic();
             StartControls();
             StartDictate();
@@ -270,7 +272,11 @@ namespace Tepi
             CloseMirror();
             CloseConvert();
             StopDictate();
+            StopComboHook();
+            StopComboAudio();
+            FlushComboStats();
             if (RapatOn) AbortRapat();
+            FlushFocusStats();
             if (tray != null) { tray.Visible = false; tray.Dispose(); }
             base.OnFormClosed(e);
         }
@@ -467,6 +473,8 @@ namespace Tepi
             if (MirrorOn) return View.Mirror;
             if (ConvertOn) return View.Convert;
             if (expanded) return View.Panel;
+            if (toast != null && (toast.Hold || toast.Interactive || toast.Priority >= 3)) return toast.View;
+            if (ComboShowing) return View.Combo;
             // Retracted: only urgent toasts pop out
             if (MiniOn() && (toast == null || !MiniLets(toast.View, toast.Priority))) return View.Mini;
             if (toast != null) return toast.View;
@@ -476,6 +484,7 @@ namespace Tepi
         // What runs underneath toasts and panel
         View ActivityView()
         {
+            if (ComboShowing) return View.Combo;
             if (RapatOn || rapatWriting) return View.Record;
             if (MeetingOn) return View.Meet;
             if (TimerOn && !MediaVisible()) return View.Timer;
@@ -1341,7 +1350,7 @@ namespace Tepi
             return s.Contains(pt) || (!bubbleRect.IsEmpty && bubbleRect.Contains(pt));
         }
 
-        bool CanExpand() { return !hiddenByUser && !PrompterOn && !ConvertOn && approvals.Count == 0 && (toast == null || !toast.Interactive); }
+        bool CanExpand() { return !hiddenByUser && !PrompterOn && !ConvertOn && !sprintActive && approvals.Count == 0 && (toast == null || !toast.Interactive); }
 
         // A toast opens where its story continues
         int ToastPage(bool hover)
@@ -1462,6 +1471,12 @@ namespace Tepi
             {
                 var pt = new PointF(e.X / scale, e.Y / scale);
                 if (current == View.Prompter && PrompterGrab(pt, Control.MousePosition)) return;
+                if (InShape(pt))
+                {
+                    if (!pointerInside) pointerInside = true;
+                    if (hits.Count == 0 && g != null && !dormant)
+                        try { Render(DateTime.UtcNow); } catch (Exception) { }
+                }
                 pressedId = HitAt(pt);
                 var h = HitById(pressedId);
                 if (h != null && h.Drag != null) { dragId = pressedId; Capture = true; h.Drag(Fraction(h, pt)); }
@@ -1760,6 +1775,7 @@ namespace Tepi
             var updateItem = new ToolStripMenuItem(Lang.T("Perbarui"), null, delegate { InstallUpdate(); }) { Visible = false };
             var hideItem = new ToolStripMenuItem(Lang.T("Sembunyikan island"), null, delegate { ToggleHidden(); }) { ShortcutKeyDisplayString = HotkeyText(HideHotkey) };
             var keysItem = new ToolStripMenuItem(Lang.T("Navigasi keyboard"), null, delegate { EnterKeyboard(); }) { ShortcutKeyDisplayString = HotkeyText(KeysHotkey) };
+            trayComboItem = new ToolStripMenuItem(Lang.T("Combo Ketikan"), null, delegate { ToggleCombo(); }) { Checked = ComboOn };
             var miniItem = new ToolStripMenuItem(Lang.T("Mini"), null, delegate { ToggleMini(); }) { ShortcutKeyDisplayString = HotkeyText(MiniHotkey) };
             var prompterItem = new ToolStripMenuItem(Lang.T("Teleprompter"), null, delegate { if (!PrompterOn) OpenPrompter(); });
             var focusItem = new ToolStripMenuItem(Lang.T("Timer"));
@@ -1772,7 +1788,7 @@ namespace Tepi
             var screenTextItem = new ToolStripMenuItem(Lang.T("Salin teks dari layar"), null, delegate { BeginInvoke(new Action(ReadScreenText)); });
             var exit = new ToolStripMenuItem(Lang.T("Keluar"), null, delegate { Close(); });
             var prefsItem = new ToolStripMenuItem(Lang.T("Pengaturan…"), null, delegate { OpenPrefs(); });
-            menu.Items.AddRange(new ToolStripItem[] { title, new ToolStripSeparator(), updateItem, miniItem, hideItem, keysItem, focusItem, workItem, noteItem, suruhItem, rapatItem, mirrorItem, pickerItem, screenTextItem, prompterItem, hookItem, kuliaItem, new ToolStripSeparator(), prefsItem, dataItem, exit });
+            menu.Items.AddRange(new ToolStripItem[] { title, new ToolStripSeparator(), updateItem, miniItem, hideItem, keysItem, trayComboItem, focusItem, workItem, noteItem, suruhItem, rapatItem, mirrorItem, pickerItem, screenTextItem, prompterItem, hookItem, kuliaItem, new ToolStripSeparator(), prefsItem, dataItem, exit });
             menu.Opening += delegate
             {
                 // Style submenus after they're rebuilt
@@ -1792,6 +1808,7 @@ namespace Tepi
                 screenTextItem.ShortcutKeyDisplayString = HotkeyText(ScreenTextHotkey);
                 hideItem.Checked = hiddenByUser;
                 miniItem.Checked = MiniWanted();
+                trayComboItem.Checked = ComboOn;
                 prompterItem.Checked = PrompterOn;
                 // Running script: controls live here
                 prompterItem.DropDownItems.Clear();
@@ -1839,8 +1856,9 @@ namespace Tepi
             };
             trayIcon = MakeTrayIcon();
             KitWindow.AppIcon = AppMark() ?? trayIcon;
-            tray = new NotifyIcon { Icon = trayIcon, Text = "Tepi", ContextMenuStrip = menu, Visible = true };
-            tray.MouseClick += (s, e) => { if (e.Button != MouseButtons.Left) return; if (hiddenByUser) ToggleHidden(); else Expand(DefaultPage(false)); };
+            tray = new NotifyIcon { Icon = trayIcon, Text = "Tepi", ContextMenuStrip = menu, Visible = false };
+            tray.MouseClick += (s, e) => { if (e.Button != MouseButtons.Left) return; OpenPrefs(); };
+            tray.Visible = true;
         }
 
 

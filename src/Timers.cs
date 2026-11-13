@@ -19,6 +19,191 @@ namespace Tepi
         bool timerPaused;
         readonly List<TimeSpan> laps = new List<TimeSpan>();
         readonly Roller timerRoller = new Roller();
+        string focusTaskTitle = "";
+        bool focusStatsLoaded;
+        bool focusStatsDirty;
+        int focusTotalMin;
+        int focusSessionsToday;
+        int focusMinToday;
+        string focusDailyDate = "";
+        int focusStreakDays;
+        string focusLastDate = "";
+        int focusTasksDone;
+        readonly Dictionary<string, int> focusWeek = new Dictionary<string, int>();
+
+        public string FocusTaskTitle { get { EnsureFocusStatsLoaded(); return focusTaskTitle; } }
+
+        public void SetFocusTask(string title)
+        {
+            EnsureFocusStatsLoaded();
+            string clean = string.IsNullOrEmpty(title) ? "" : title.Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' ').Trim();
+            focusTaskTitle = clean;
+            if (settings != null) settings.Set("focus.task", clean);
+            if (settings != null) settings.Save();
+            Kick();
+        }
+
+        public void ClearFocusTask() { SetFocusTask(""); }
+
+        void EnsureFocusStatsLoaded()
+        {
+            if (focusStatsLoaded) return;
+            focusStatsLoaded = true;
+            focusWeek.Clear();
+            if (settings == null) return;
+
+            focusTaskTitle = (settings.Get("focus.task", "") ?? "").Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' ').Trim();
+            focusTotalMin = Math.Max(0, settings.GetInt("focus.total_min", 0));
+            focusSessionsToday = Math.Max(0, settings.GetInt("focus.sessions_today", 0));
+            focusMinToday = Math.Max(0, settings.GetInt("focus.min_today", 0));
+            focusDailyDate = settings.Get("focus.daily_date", "") ?? "";
+            focusStreakDays = Math.Max(0, settings.GetInt("focus.streak_days", 0));
+            focusLastDate = settings.Get("focus.last_date", "") ?? "";
+            focusTasksDone = Math.Max(0, settings.GetInt("focus.tasks_done", 0));
+
+            string weekRaw = settings.Get("focus.week", "") ?? "";
+            if (weekRaw.Length > 0)
+            {
+                string[] parts = weekRaw.Split(',');
+                for (int i = 0; i < parts.Length; i++)
+                {
+                    int colon = parts[i].IndexOf(':');
+                    if (colon <= 0) continue;
+                    string d = parts[i].Substring(0, colon).Trim();
+                    int m;
+                    if (int.TryParse(parts[i].Substring(colon + 1).Trim(), out m) && m > 0)
+                        focusWeek[d] = m;
+                }
+            }
+
+            string today = DateTime.Now.ToString("yyyy-MM-dd");
+            if (focusDailyDate != today)
+            {
+                focusDailyDate = today;
+                focusSessionsToday = 0;
+                focusMinToday = 0;
+                focusStatsDirty = true;
+            }
+        }
+
+        public void FlushFocusStats()
+        {
+            if (!focusStatsLoaded || !focusStatsDirty || settings == null) return;
+            focusStatsDirty = false;
+            settings.Set("focus.task", focusTaskTitle ?? "");
+            settings.Set("focus.total_min", focusTotalMin.ToString());
+            settings.Set("focus.sessions_today", focusSessionsToday.ToString());
+            settings.Set("focus.min_today", focusMinToday.ToString());
+            settings.Set("focus.daily_date", focusDailyDate ?? "");
+            settings.Set("focus.streak_days", focusStreakDays.ToString());
+            settings.Set("focus.last_date", focusLastDate ?? "");
+            settings.Set("focus.tasks_done", focusTasksDone.ToString());
+
+            var weekList = new List<string>();
+            var cutoff = DateTime.Today.AddDays(-6);
+            foreach (var kv in focusWeek)
+            {
+                DateTime dt;
+                if (DateTime.TryParseExact(kv.Key, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out dt))
+                {
+                    if (dt >= cutoff && kv.Value > 0)
+                        weekList.Add(kv.Key + ":" + kv.Value);
+                }
+            }
+            settings.Set("focus.week", string.Join(",", weekList.ToArray()));
+            settings.Save();
+        }
+
+        public int FocusMinToday { get { EnsureFocusStatsLoaded(); return focusMinToday; } }
+        public int FocusSessionsToday { get { EnsureFocusStatsLoaded(); return focusSessionsToday; } }
+        public int FocusTotalMin { get { EnsureFocusStatsLoaded(); return focusTotalMin; } }
+        public int FocusStreakDays { get { EnsureFocusStatsLoaded(); return focusStreakDays; } }
+        public int FocusTasksDone { get { EnsureFocusStatsLoaded(); return focusTasksDone; } }
+
+        public int FocusWeekTotalMin
+        {
+            get
+            {
+                int[] bars = FocusWeekBars();
+                int sum = 0;
+                for (int i = 0; i < bars.Length; i++) sum += bars[i];
+                return sum;
+            }
+        }
+
+        public int[] FocusWeekBars()
+        {
+            EnsureFocusStatsLoaded();
+            int[] bars = new int[7];
+            var today = DateTime.Today;
+            for (int i = 0; i < 7; i++)
+            {
+                string key = today.AddDays(i - 6).ToString("yyyy-MM-dd");
+                int val;
+                if (focusWeek.TryGetValue(key, out val)) bars[i] = val;
+            }
+            return bars;
+        }
+
+        public void ResetFocusStats()
+        {
+            EnsureFocusStatsLoaded();
+            focusTotalMin = 0;
+            focusSessionsToday = 0;
+            focusMinToday = 0;
+            focusDailyDate = DateTime.Now.ToString("yyyy-MM-dd");
+            focusStreakDays = 0;
+            focusLastDate = "";
+            focusTasksDone = 0;
+            focusWeek.Clear();
+            focusStatsDirty = true;
+            FlushFocusStats();
+            Kick();
+        }
+
+        public void RecordFocusCompletion(int minutes)
+        {
+            if (minutes <= 0) return;
+            EnsureFocusStatsLoaded();
+            string today = DateTime.Now.ToString("yyyy-MM-dd");
+            if (focusDailyDate != today)
+            {
+                focusDailyDate = today;
+                focusSessionsToday = 0;
+                focusMinToday = 0;
+            }
+            focusTotalMin += minutes;
+            focusMinToday += minutes;
+            focusSessionsToday++;
+
+            int curWeek;
+            focusWeek.TryGetValue(today, out curWeek);
+            focusWeek[today] = curWeek + minutes;
+
+            if (focusLastDate != today)
+            {
+                string yesterday = DateTime.Today.AddDays(-1).ToString("yyyy-MM-dd");
+                if (focusLastDate == yesterday) focusStreakDays++;
+                else focusStreakDays = 1;
+                focusLastDate = today;
+            }
+
+            focusStatsDirty = true;
+            GrantProductivityXp(minutes * 4);
+            UnlockComboBadge("deep_focus");
+            if (!Anim.Reduced) celebrateUtc = DateTime.UtcNow;
+            FlushFocusStats();
+        }
+
+        public void RecordTaskDoneXp(int xp = 35)
+        {
+            EnsureFocusStatsLoaded();
+            focusTasksDone++;
+            focusStatsDirty = true;
+            GrantProductivityXp(xp);
+            FlushFocusStats();
+        }
+
 
         bool TimerOn { get { return timerKind != TimerKind.Off; } }
         bool Counting { get { return timerKind == TimerKind.Focus || timerKind == TimerKind.Break || timerKind == TimerKind.Countdown; } }
@@ -133,11 +318,17 @@ namespace Tepi
             Chime();
             if (timerKind == TimerKind.Focus)
             {
+                int mins = Math.Max(1, (int)Math.Round((timerEndUtc - timerStartUtc).TotalMinutes));
+                RecordFocusCompletion(mins);
                 int rest = Math.Max(1, settings.GetInt("focus.break", 5));
                 timerKind = TimerKind.Break;
                 timerStartUtc = now;
                 timerEndUtc = now.AddMinutes(rest);
-                FocusSummary(Lang.T("Fokus selesai"), Lang.T("istirahat ") + rest + Lang.T(" menit"));
+                string detail = "+" + (mins * 4) + " XP";
+                if (focusStreakDays > 0) detail += " · " + Lang.F("Streak {0} hari", focusStreakDays);
+                if (focusTaskTitle.Length > 0) detail += " · " + focusTaskTitle;
+                detail += " · " + Lang.T("istirahat ") + rest + Lang.T(" menit");
+                FocusSummary(Lang.T("Fokus selesai"), detail);
             }
             else if (timerKind == TimerKind.Break)
             {
@@ -199,7 +390,13 @@ namespace Tepi
             if (sweep > 0.5f) g.DrawArc(p.P(c, 2.2f), rect, -90, sweep);
         }
 
-        float TimerWidth() { return timerPaused ? 214 : 196; }
+        float TimerWidth()
+        {
+            float w = timerPaused ? 214 : 196;
+            if ((timerKind == TimerKind.Focus || timerKind == TimerKind.Break) && focusTaskTitle.Length > 0)
+                w = Math.Min(340, Math.Max(220, w + Math.Min(126, focusTaskTitle.Length * 7)));
+            return w;
+        }
 
         // Digits roll fast, then wait a second
         double TimerWait(DateTime now)
@@ -228,6 +425,8 @@ namespace Tepi
             float cy = h / 2;
             LiveRect(new RectangleF(11, cy - 9, 18, 18), timerPaused ? 0 : TickFps, t => DrawTimerRing(20, cy, 7.5f));
             string label = timerPaused ? TimerLabel() + Lang.T(" · dijeda") : TimerLabel();
+            if ((timerKind == TimerKind.Focus || timerKind == TimerKind.Break) && focusTaskTitle.Length > 0)
+                label += " · " + focusTaskTitle;
             p.Text(label, Ink.Semi(12.5f), p.T.Text, 38, cy, w - 38 - 70, StringAlignment.Near);
             LiveTimer(Ink.Semi(13f), timerPaused ? p.T.Faint : p.T.Sub, w - 18, cy, StringAlignment.Far, 60);
             AddHit(new RectangleF(0, 0, w, h), "timerPill", delegate { Expand(PageControl); });

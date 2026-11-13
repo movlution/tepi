@@ -18,6 +18,7 @@ namespace Tepi
             if (prefs != null && !prefs.IsDisposed) { prefs.Activate(); return; }
             prefs = new PrefsWindow(this);
             prefs.Show();
+            prefs.Activate();
         }
 
         void OpenPrefs(string section)
@@ -283,7 +284,7 @@ namespace Tepi
                 new[] { "look", "Tema dan warna", "", "1" }, new[] { "packs", "Paket tema", "", "1" },
                 new[] { "island", "Letak dan bentuk", "", "2" }, new[] { "behave", "Perilaku", "", "2" }, new[] { "idle", "Saat diam", "", "2" }, new[] { "home", "Ringkasan", "", "2" }, new[] { "tabs", "Tab panel", "", "2" },
                 new[] { "dock", "Dock dan taskbar", "", "3" },
-                new[] { "work", "Tugas dan catatan", "\uE73A", "4" }, new[] { "music", "Musik", "", "4" }, new[] { "messages", "Pesan", "", "4" }, new[] { "system", "Sistem", "", "4" }, new[] { "files", "Rak dan berkas", "", "4" },
+                new[] { "work", "Tugas dan catatan", "\uE73A", "4" }, new[] { "music", "Musik", "", "4" }, new[] { "messages", "Pesan", "", "4" }, new[] { "system", "Sistem", "", "4" }, new[] { "combo", "Gamifikasi Ketikan", "\uE7FC", "4" }, new[] { "files", "Rak dan berkas", "", "4" },
                 new[] { "agents", "Agen", "", "4" }, new[] { "dikte", "Dikte", "", "4" }, new[] { "remind", "Pengingat", "", "4" },
                 new[] { "access", "Aksesibilitas", "", "5" }, new[] { "keys", "Pintasan", "", "5" }, new[] { "about", "Tentang", "", "5" },
             };
@@ -298,7 +299,7 @@ namespace Tepi
                 { "idle", "Isi island saat tidak ada aktivitas" }, { "home", "Kartu yang tampil di Ringkasan dan urutannya" },
                 { "tabs", "Tab di panel island dan urutannya" }, { "dock", "Bar aplikasi dan widget, atau pengganti taskbar" },
                 { "work", "Daftar tugas, pengingat tenggat, dan catatan lokal" }, { "music", "Lirik dan visualizer" }, { "messages", "Notifikasi pesan dan siapa yang menampilkannya" },
-                { "system", "HUD keyboard, perangkat, dan aktivitas sistem" }, { "files", "Rak, ubah format, clipboard, dan screenshot" },
+                { "system", "HUD keyboard, perangkat, dan aktivitas sistem" }, { "combo", "Combo, suara mekanikal/arcade, Fever Mode, penalti, XP, dan Sprint 30 detik" }, { "files", "Rak, ubah format, clipboard, dan screenshot" },
                 { "agents", "Claude Code, Codex, dan agent lain" }, { "dikte", "Bicara, lalu teksnya ditempel" },
                 { "remind", "Sholat, cuaca, minum, mata, dan peregangan" }, { "access", "Pembaca layar, gerak, dan Senyap" },
                 { "keys", "Pintasan keyboard Tepi" }, { "about", "Versi, saran, dan pembuat Tepi" },
@@ -734,7 +735,7 @@ namespace Tepi
                 new[] { "Gaya tab", "\uECA5" }, new[] { "Dibuka di", "\uE8A7" }, new[] { "Pindah tab", "\uE8A9" },
                 new[] { "Lirik di island", "\uE8D6" }, new[] { "Cari lirik online", "\uE721" }, new[] { "Visualizer", "\uE9E9" },
                 new[] { "Notifikasi pesan", "\uE8BD" }, new[] { "Tampilkan isi pesan", "\uE8BD" }, new[] { "Caps Lock", "\uE765" }, new[] { "Ingatkan cabut charger", "\uE83E" }, new[] { "Cuaca dan hujan", "\uE753" }, new[] { "Mode rapat", "\uE720" },
-                new[] { "Num Lock, Scroll Lock", "\uE765" }, new[] { "Bahasa input", "\uE765" }, new[] { "Kelas yang berlangsung", "\uE7BE" },
+                new[] { "Num Lock, Scroll Lock", "\uE765" }, new[] { "Bahasa input", "\uE765" }, new[] { "Combo Ketikan", "\uE7FC" }, new[] { "Efek suara combo", "\uE767" }, new[] { "Kelas yang berlangsung", "\uE7BE" },
                 new[] { "Progres unduhan", "\uE896" }, new[] { "Riwayat clipboard", "\uE77F" }, new[] { "Flashdisk", "\uE88E" },
                 new[] { "Preview screenshot", "\uE91B" }, new[] { "Rak berkas", "\uE7B8" }, new[] { "Istirahat fokus", "\uE916" }, new[] { "Tahan notifikasi saat fokus", "\uE7E7" },
                 new[] { "Claude Code", "\uE756" }, new[] { "Kuota agent", "\uEC4A" }, new[] { "Menahan izin", "\uE72E" },
@@ -756,6 +757,11 @@ namespace Tepi
                 new[] { "Banner pesan", "\uE8BD" }, new[] { "Banner Windows masih nyala", "\uE7BA" }, new[] { "Tepi penerima utama", "\uEA8F" }, new[] { "Mode berbagi layar", "\uE7F4" }, new[] { "Isi kiri", "\uE8A0" }, new[] { "Isi kanan", "\uE8A0" },
                 new[] { "Rapikan Downloads", "\uE8B7" }, new[] { "Susunan folder", "\uE8B7" }, new[] { "Tawarkan saat", "\uEA8F" }, new[] { "Rapikan sekarang", "\uE8B7" }, new[] { "Urungkan rapikan terakhir", "\uE7A7" },
                 new[] { "Layanan teks", "\uE8F2" }, new[] { "Mesin suara", "\uE720" }, new[] { "Yang dikirim", "\uE72E" }, new[] { "Perbaiki teks terpilih", "\uE8AC" }, new[] { "Terjemahkan teks terpilih", "\uE8C1" },
+                new[] { "Kustomisasi gamifikasi", "\uE7FC" }, new[] { "Overdrive / Fever Mode", "\uE945" }, new[] { "Finisher tombol Enter", "\uE751" },
+                new[] { "Profil suara", "\uE8D6" }, new[] { "Tes suara", "\uE767" }, new[] { "Mode penalti", "\uE72E" },
+                new[] { "Level, XP & Achievement", "\uE734" }, new[] { "Target ketikan harian", "\uE73E" }, new[] { "Target 100x combo harian", "\uE945" },
+                new[] { "Progres & Rekor", "\uE9D2" }, new[] { "Lencana", "\uE734" }, new[] { "Typing Sprint 30 Detik", "\uE916" }, new[] { "Reset statistik ketikan", "\uE7A7" },
+                new[] { "3 Prioritas Hari Ini", "\uE73A" }, new[] { "Statistik Fokus", "\uE916" },
             };
 
             static char GlyphFor(string title)
@@ -1333,6 +1339,51 @@ namespace Tepi
                         add(Row(Lang.T("Tombol di dock"), Lang.T("Satu tombol untuk mengakses Tugas dan catatan"), Switch("dockbar.work", true, null)));
                         add(Row(Lang.T("Pintasan keyboard"), island.HotkeyText(WorkHotkey),
                             Button(Lang.T("Atur pintasan"), false, delegate { section = "keys"; Relayout(); })));
+                        cap(Lang.T("Fokus & Prioritas"));
+                        add(Row(Lang.T("Tahan notifikasi saat fokus"), Lang.T("Notifikasi biasa ditunda sampai sesi fokus selesai"), Switch("focus.hold", true, null)));
+                        add(Row(Lang.T("3 Prioritas Hari Ini"), Lang.F("{0}/{1} selesai hari ini", island.PriorityDoneCount, island.PriorityCount), Button(Lang.T("Tambah"), false, delegate { island.PromptAddPriority(); })));
+                        KitButton resetFocusBtn = null;
+                        KitRow resetFocusRow = null;
+                        string resetFocusNote = Lang.F("Hari ini {0} mnt · Minggu ini {1} mnt · Streak {2} hari · {3} tugas", island.FocusMinToday, island.FocusWeekTotalMin, island.FocusStreakDays, island.FocusTasksDone);
+                        var focusArmed = new System.Windows.Forms.Timer { Interval = 4000 };
+                        int focusResetIdleW = 0;
+                        resetFocusBtn = Button(Lang.T("Reset"), false, delegate
+                        {
+                            if (!focusArmed.Enabled)
+                            {
+                                focusArmed.Start();
+                                int right = resetFocusBtn.Right;
+                                resetFocusBtn.Text = Lang.T("Klik lagi");
+                                int needW = TextRenderer.MeasureText(resetFocusBtn.Text, resetFocusBtn.Font).Width + (int)(32 * Ui);
+                                if (needW != resetFocusBtn.Width)
+                                {
+                                    resetFocusBtn.Width = needW;
+                                    resetFocusBtn.Left = right - needW;
+                                }
+                                resetFocusRow.Detail = Lang.T("Klik sekali lagi dalam 4 detik untuk menghapus statistik");
+                                resetFocusBtn.Invalidate();
+                                resetFocusRow.Invalidate();
+                                return;
+                            }
+                            focusArmed.Stop();
+                            island.ResetFocusStats();
+                            Relayout();
+                        });
+                        focusResetIdleW = resetFocusBtn.Width;
+                        focusArmed.Tick += delegate
+                        {
+                            focusArmed.Stop();
+                            int right = resetFocusBtn.Right;
+                            resetFocusBtn.Text = Lang.T("Reset");
+                            resetFocusBtn.Width = focusResetIdleW;
+                            resetFocusBtn.Left = right - focusResetIdleW;
+                            resetFocusRow.Detail = resetFocusNote;
+                            resetFocusBtn.Invalidate();
+                            resetFocusRow.Invalidate();
+                        };
+                        resetFocusBtn.Disposed += delegate { focusArmed.Dispose(); };
+                        resetFocusRow = Row(Lang.T("Statistik Fokus"), resetFocusNote, resetFocusBtn);
+                        add(resetFocusRow);
                         break;
                     case "music":
                         add(Row(Lang.T("Lirik di island"), null, Switch("lyrics", true, null)));
@@ -1374,6 +1425,9 @@ namespace Tepi
                         add(Row("Caps Lock", Lang.T("HUD saat ditekan, penanda selama nyala"), Switch("keys.caps", true, null)));
                         add(Row("Num Lock, Scroll Lock", Lang.T("HUD saat ditekan"), Switch("keys.num", false, null)));
                         add(Row(Lang.T("Bahasa input"), Lang.T("HUD saat layout keyboard berganti"), Switch("keys.lang", true, null)));
+                        add(Row(Lang.T("Combo Ketikan"), Lang.T("Hitungan combo, peringkat, dan efek seru saat mengetik cepat"), Switch("keys.combo", false, on => { island.SetFlag("keys.combo", on); island.SyncComboHook(); })));
+                        add(Row(Lang.T("Efek suara combo"), Lang.T("Bunyi saat naik peringkat combo"), Switch("keys.combo.sound", false, on => { island.SetFlag("keys.combo.sound", on); island.ReloadComboSettings(); })));
+                        add(Row(Lang.T("Kustomisasi gamifikasi"), Lang.T("Suara, Fever Mode, penalti, XP, dan Sprint 30 detik"), Button(Lang.T("Buka"), false, delegate { section = "combo"; Fill(); })));
                         cap(Lang.T("Perangkat"));
                         int[] unplugAt = { 0, 80, 85, 90 };
                         add(Row(Lang.T("Ingatkan cabut charger"), Lang.T("Menjaga umur baterai"), Popup(new[] { Lang.T("Mati"), "80%", "85%", "90%" }, Math.Max(0, Array.IndexOf(unplugAt, settings.GetInt("battery.unplug", 0))), i => { settings.Set("battery.unplug", unplugAt[i]); settings.Save(); })));
@@ -1382,6 +1436,89 @@ namespace Tepi
                         add(Row(Lang.T("Kelas yang berlangsung"), null, Switch("class.island", true, null)));
                         add(Row(Lang.T("Progres unduhan"), null, Switch("downloads", true, null)));
                         add(Row(Lang.T("Mode rapat"), Lang.T("Mikrofon dipakai lebih dari 20 detik: durasi tampil, notifikasi biasa ditahan"), Switch("meeting", true, null)));
+                        break;
+                    case "combo":
+                        cap(Lang.T("Umum"));
+                        add(Row(Lang.T("Combo Ketikan"), Lang.T("Hitungan combo, peringkat, dan efek seru saat mengetik cepat"), Switch("keys.combo", false, on => { island.SetFlag("keys.combo", on); island.SyncComboHook(); Relayout(); })));
+                        add(Row(Lang.T("Overdrive / Fever Mode"), Lang.T("Efek api, multiplier 2x/4x, dan pendaran tepi saat 100x+"), Switch("keys.combo.fever", true, on => { island.SetFlag("keys.combo.fever", on); island.ReloadComboSettings(); })));
+                        add(Row(Lang.T("Finisher tombol Enter"), Lang.T("Gelombang kejut & partikel saat tekan Enter di 25x+"), Switch("keys.combo.enter", true, on => { island.SetFlag("keys.combo.enter", on); island.ReloadComboSettings(); })));
+                        cap(Lang.T("Suara ketikan"));
+                        add(Row(Lang.T("Efek suara combo"), Lang.T("Suara ketikan dinamis & fanfare rekor baru"), Switch("keys.combo.sound", false, on => { island.SetFlag("keys.combo.sound", on); island.ReloadComboSettings(); })));
+                        string[] profileIds = { "arcade", "thocky", "clicky", "piano", "classic" };
+                        string[] profileNames = { Lang.T("Arcade Pitch-Up"), Lang.T("Thocky Mechanical"), Lang.T("Clicky Mechanical"), Lang.T("Piano"), Lang.T("Klasik (Naik tier saja)") };
+                        int profAt = Math.Max(0, Array.IndexOf(profileIds, settings.Get("keys.combo.sound.profile", "arcade")));
+                        add(Row(Lang.T("Profil suara"), Lang.T("Karakter bunyi tiap ketikan dan kenaikan peringkat"), Popup(profileNames, profAt, i => { settings.Set("keys.combo.sound.profile", profileIds[i]); settings.Save(); island.ReloadComboSettings(); })));
+                        add(Row(Lang.T("Tes suara"), Lang.T("Putar contoh bunyi combo saat ini"), Button(Lang.T("Putar"), false, delegate { island.PlayComboTestSound(); })));
+                        cap(Lang.T("Penalti & Rantai"));
+                        string[] penIds = { "shield", "drain", "off" };
+                        string[] penNames = { Lang.T("Shield + Drain"), Lang.T("Drain saja"), Lang.T("Mati") };
+                        int penAt = Math.Max(0, Array.IndexOf(penIds, settings.Get("keys.combo.penalty", "shield")));
+                        add(Row(Lang.T("Mode penalti"), Lang.T("Perilaku tombol Backspace saat combo berjalan; 25 ketikan bersih memberi Perfect Chain"), Popup(penNames, penAt, i => { settings.Set("keys.combo.penalty", penIds[i]); settings.Save(); island.ReloadComboSettings(); })));
+                        cap(Lang.T("Level, XP & Target Harian"));
+                        add(Row(Lang.T("Level, XP & Achievement"), Lang.T("Catat XP, target harian, dan lencana pencapaian"), Switch("keys.combo.rpg", true, on => { island.SetFlag("keys.combo.rpg", on); island.ReloadComboSettings(); Relayout(); })));
+                        int[] charGoals = { 2000, 5000, 10000, 20000 };
+                        string[] charGoalLabels = { "2.000", "5.000", "10.000", "20.000" };
+                        int charAt = Math.Max(0, Array.IndexOf(charGoals, settings.GetInt("keys.combo.quest.chars", 5000)));
+                        add(Row(Lang.T("Target ketikan harian"), null, Popup(charGoalLabels, charAt, i => { settings.Set("keys.combo.quest.chars", charGoals[i]); settings.Save(); island.ReloadComboSettings(); })));
+                        int[] comboGoals = { 1, 3, 5, 10 };
+                        string[] comboGoalLabels = { "1x", "3x", "5x", "10x" };
+                        int comboAt = Math.Max(0, Array.IndexOf(comboGoals, settings.GetInt("keys.combo.quest.combos", 3)));
+                        add(Row(Lang.T("Target 100x combo harian"), null, Popup(comboGoalLabels, comboAt, i => { settings.Set("keys.combo.quest.combos", comboGoals[i]); settings.Save(); island.ReloadComboSettings(); })));
+                        cap(Lang.T("Statistik & Mini-Game"));
+                        string progText = Lang.F("Lv.{0} · {1} ({2} XP)", island.ComboLevel, island.ComboLevelTitle, island.ComboXp);
+                        Font progFont = UiFont(12f);
+                        int progW = TextRenderer.MeasureText(progText, progFont).Width + (int)(8 * Ui);
+                        add(Row(Lang.T("Progres & Rekor"),
+                            Lang.F("Rekor {0}x · {1} WPM · Sprint {2} WPM · {3} hr ini", island.ComboAllTimeBest, island.ComboAllTimePeakWpm, island.ComboSprintBestWpm, island.ComboDailyChars),
+                            new Label { Text = progText, Font = progFont, ForeColor = KitInk.Sub, BackColor = Color.Transparent, AutoSize = false, TextAlign = ContentAlignment.MiddleRight, Size = new Size(progW, (int)(24 * Ui)) }));
+                        string badgeText = island.ComboBadgesCount + "/" + island.ComboBadgesTotal;
+                        Font badgeFont = UiFont(12.5f);
+                        int badgeW = TextRenderer.MeasureText(badgeText, badgeFont).Width + (int)(8 * Ui);
+                        add(Row(Lang.T("Lencana"), island.ComboUnlockedBadgesSummary(),
+                            new Label { Text = badgeText, Font = badgeFont, ForeColor = KitInk.Sub, BackColor = Color.Transparent, AutoSize = false, TextAlign = ContentAlignment.MiddleRight, Size = new Size(badgeW, (int)(24 * Ui)) }));
+                        add(Row(Lang.T("Typing Sprint 30 Detik"), Lang.T("Uji kecepatan WPM selama 30 detik di island"), Button(Lang.T("Mulai Sprint"), true, delegate { island.StartTypingSprint(); })));
+                        KitButton resetComboBtn = null;
+                        KitRow resetComboRow = null;
+                        string resetComboNote = Lang.T("Hapus semua XP, level, rekor combo, WPM, dan lencana");
+                        var comboArmed = new System.Windows.Forms.Timer { Interval = 4000 };
+                        int resetIdleW = 0;
+                        resetComboBtn = Button(Lang.T("Reset"), false, delegate
+                        {
+                            if (!comboArmed.Enabled)
+                            {
+                                comboArmed.Start();
+                                int right = resetComboBtn.Right;
+                                resetComboBtn.Text = Lang.T("Klik lagi");
+                                int needW = TextRenderer.MeasureText(resetComboBtn.Text, resetComboBtn.Font).Width + (int)(32 * Ui);
+                                if (needW != resetComboBtn.Width)
+                                {
+                                    resetComboBtn.Width = needW;
+                                    resetComboBtn.Left = right - needW;
+                                }
+                                resetComboRow.Detail = Lang.T("Klik sekali lagi dalam 4 detik untuk menghapus statistik");
+                                resetComboBtn.Invalidate();
+                                resetComboRow.Invalidate();
+                                return;
+                            }
+                            comboArmed.Stop();
+                            island.ResetComboStats();
+                            Relayout();
+                        });
+                        resetIdleW = resetComboBtn.Width;
+                        comboArmed.Tick += delegate
+                        {
+                            comboArmed.Stop();
+                            int right = resetComboBtn.Right;
+                            resetComboBtn.Text = Lang.T("Reset");
+                            resetComboBtn.Width = resetIdleW;
+                            resetComboBtn.Left = right - resetIdleW;
+                            resetComboRow.Detail = resetComboNote;
+                            resetComboBtn.Invalidate();
+                            resetComboRow.Invalidate();
+                        };
+                        resetComboBtn.Disposed += delegate { comboArmed.Dispose(); };
+                        resetComboRow = Row(Lang.T("Reset statistik ketikan"), resetComboNote, resetComboBtn);
+                        add(resetComboRow);
                         break;
                     case "files":
                         cap(Lang.T("Rak"));

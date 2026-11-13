@@ -23,7 +23,8 @@ namespace Tepi
                 case View.Download:
                 case View.Run:
                 case View.Meet:
-                case View.Record: return true;
+                case View.Record:
+                case View.Combo: return true;
             }
             return false;
         }
@@ -39,6 +40,7 @@ namespace Tepi
                 case View.Lyric: return new SizeF(SideW, 86);
                 case View.Timer: return new SizeF(SideW, 80);
                 case View.Agent: return new SizeF(SideW, 78);
+                case View.Combo: return new SizeF(SideW, 84);
             }
             return new SizeF(SideW, 68);
         }
@@ -70,6 +72,7 @@ namespace Tepi
                     break;
                 case View.Meet: SideMeet(w, h); break;
                 case View.Record: SideRecord(w, h); break;
+                case View.Combo: SideCombo(w, h, now); break;
             }
         }
 

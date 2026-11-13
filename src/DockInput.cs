@@ -278,8 +278,10 @@ namespace Tepi
 
             void DockMenu()
             {
-                var m = new ContextMenuStrip();
+                var m = new ContextMenuStrip { ShowCheckMargin = true, ShowImageMargin = false };
                 m.Items.Add(Lang.T("Pengaturan Dock"), null, delegate { isle.OpenPrefs("dock"); });
+                var combo = new ToolStripMenuItem(Lang.T("Combo Ketikan"), null, delegate { isle.ToggleCombo(); }) { Checked = isle.ComboOn };
+                m.Items.Add(combo);
                 m.Items.Add(Lang.T("Task Manager"), null, delegate { Open("taskmgr.exe"); });
                 if (Replacing) m.Items.Add(Lang.T("Ikon di pojok taskbar"), null, delegate { Open("ms-settings:taskbar"); });
                 m.Items.Add(new ToolStripSeparator());

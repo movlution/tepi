@@ -244,6 +244,21 @@ namespace Tepi
         {
             var previous = TodoFile.Load();
             if (!TodoFile.Save(todos)) return false;
+            for (int i = 0; i < todos.Count; i++)
+            {
+                var cur = todos[i];
+                if (!cur.Done) continue;
+                bool wasDone = false;
+                for (int j = 0; j < previous.Count; j++)
+                {
+                    if ((!string.IsNullOrEmpty(cur.Id) ? previous[j].Id == cur.Id : (previous[j].Title == cur.Title && previous[j].Due == cur.Due)) && previous[j].Done)
+                    {
+                        wasDone = true;
+                        break;
+                    }
+                }
+                if (!wasDone) RecordTaskDoneXp(35);
+            }
             // Only replace reminders matching a previously persisted task and due time.
             // A broad prefix match would remove unrelated user reminders.
             foreach (var old in previous)

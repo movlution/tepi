@@ -35,6 +35,8 @@ namespace Tepi
                     return s != null && s.Plan != null && s.Plan.Count > 0 ? (float)PlanDone(s) / s.Plan.Count : -1;
                 case View.Idle:
                     return hasBattery && !onAc ? -1 : hasBattery && battery < 100 ? battery / 100f : -1;
+                case View.Combo:
+                    return comboActive ? ComboDrainFraction() : -1;
             }
             return -1;
         }
@@ -134,7 +136,7 @@ namespace Tepi
 
         void Glow(List<PointF> a, List<PointF> b, float strength)
         {
-            Color c = p.T.Accent;
+            Color c = current == View.Combo ? ComboTierColor(ComboTier, clock.Elapsed.TotalSeconds) : p.T.Accent;
             foreach (var pts in new[] { a, b })
             {
                 Stroke(pts, Ink.A(c, 0.16f * strength * p.Alpha), 9f);
@@ -149,7 +151,8 @@ namespace Tepi
             float f = EdgeFraction(now);
             double since = toast != null && toast.View == View.Notif ? (now - toast.ShownUtc).TotalSeconds : 9;
             bool sweep = since < 0.9 && !Anim.Reduced;
-            if (f < 0 && !sweep) { DrawConfetti(now, r); return; }
+            bool fever = current == View.Combo && ComboFeverActive;
+            if (f < 0 && !sweep && !fever) { DrawConfetti(now, r); return; }
             EdgeShape(path, r);
             if (edgePts == null) return;
             float half = edgeLen[edgeLen.Length - 1] / 2;
@@ -160,13 +163,22 @@ namespace Tepi
                 float k = Ease.OutCubic((float)(since / 0.9)), head = half * k, tail = Math.Max(0, head - half * 0.35f);
                 Glow(EdgeRun(tail, head, true), EdgeRun(tail, head, false), 1 - k * 0.6f);
             }
+            if (fever)
+            {
+                float pulse = Anim.Reduced ? 0.45f : (0.35f + 0.35f * (float)Math.Sin(clock.Elapsed.TotalSeconds * 5.2));
+                Color fc = ComboTierColor(ComboTier, clock.Elapsed.TotalSeconds);
+                var full = EdgeRun(0, edgeLen[edgeLen.Length - 1], true);
+                Stroke(full, Ink.A(fc, pulse * 0.42f), 5.5f);
+                Stroke(full, Ink.A(fc, pulse * 0.85f), 2.0f);
+            }
             DrawConfetti(now, r);
         }
 
         bool EdgeMoving(DateTime now)
         {
             bool sweep = EdgeOn && !Anim.Reduced && toast != null && toast.View == View.Notif && (now - toast.ShownUtc).TotalSeconds < 0.9;
-            return sweep || (now - celebrateUtc).TotalSeconds < ConfettiSec;
+            bool fever = EdgeOn && !Anim.Reduced && current == View.Combo && ComboFeverActive;
+            return sweep || fever || (now - celebrateUtc).TotalSeconds < ConfettiSec;
         }
 
         // Keeps maximized windows below the island
@@ -192,6 +204,7 @@ namespace Tepi
 
         void TaskFinished(KuliaTask task)
         {
+            RecordTaskDoneXp(35);
             bool today = task.DeadlineUtc.ToLocalTime().Date == DateTime.Today;
             bool left = tasks != null && tasks.Exists(t => t != task && t.DeadlineUtc.ToLocalTime().Date == DateTime.Today);
             if (!today || left) { ShowInfo('\0', Lang.T("Ditandai selesai"), task.Title, true); return; }
@@ -211,7 +224,9 @@ namespace Tepi
         {
             double t = (now - celebrateUtc).TotalSeconds;
             if (t >= ConfettiSec || t < 0) return;
-            Color[] ink = { p.T.Accent, p.T.Text, p.T.Sub };
+            Color[] ink = current == View.Combo
+                ? new Color[] { ComboTierColor(ComboTier, t * 2.5), Color.FromArgb(255, 255, 214, 10), Color.FromArgb(255, 50, 173, 230), Color.FromArgb(255, 255, 55, 95), Color.FromArgb(255, 48, 209, 88) }
+                : new Color[] { p.T.Accent, p.T.Text, p.T.Sub };
             float fade = 1 - Ease.Clamp01((float)((t - 1.2) / 0.6));
             for (int i = 0; i < 22; i++)
             {
@@ -222,7 +237,7 @@ namespace Tepi
                 var st = g.Save();
                 g.TranslateTransform(x, y);
                 g.RotateTransform((float)(i * 47 + t * 360 * (i % 2 == 0 ? 1 : -1)));
-                using (var b = new SolidBrush(Ink.A(ink[i % 3], fade * p.Alpha))) g.FillRectangle(b, -3f, -1.5f, 6f, 3f);
+                using (var b = new SolidBrush(Ink.A(ink[i % ink.Length], fade * p.Alpha))) g.FillRectangle(b, -3f, -1.5f, 6f, 3f);
                 g.Restore(st);
             }
         }

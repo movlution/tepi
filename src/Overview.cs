@@ -16,18 +16,19 @@ namespace Tepi
             public int Count;
         }
 
-        enum HomeCard { Quota, Media, Agents, Timer, Class, Messages, Shelf, Weather, Battery, Clips, Pray }
+        enum HomeCard { Quota, Media, Agents, Timer, Class, Messages, Shelf, Weather, Battery, Clips, Pray, Combo, Priorities, Focus }
 
         // Enum order: settings ids, names, settings notes
-        static readonly string[] HomeIds = { "quota", "media", "agents", "timer", "class", "messages", "shelf", "weather", "battery", "clips", "pray" };
-        static readonly string[] HomeNames = { "Kuota AI", "Musik", "Agen", "Timer", "Kuliah", "Pesan", "Rak", "Cuaca", "Baterai", "Clipboard", "Sholat" };
+        static readonly string[] HomeIds = { "quota", "media", "agents", "timer", "class", "messages", "shelf", "weather", "battery", "clips", "pray", "combo", "priorities", "focus" };
+        static readonly string[] HomeNames = { "Kuota AI", "Musik", "Agen", "Timer", "Kuliah", "Pesan", "Rak", "Cuaca", "Baterai", "Clipboard", "Sholat", "Combo Ketikan", "3 Prioritas Hari Ini", "Fokus & Progres" };
         static readonly string[] HomeNotes =
         {
             "Saat pemakaian 70% ke atas", "Saat musik diputar", "Sesi agen dan izin yang menunggu", "Saat timer berjalan", "Kelas dan tenggat terdekat",
-            "Pesan yang belum dibuka", "Berkas di Rak", "Suhu dan peringatan hujan", "Laptop dan perangkat Bluetooth", "Teks terakhir yang disalin", "Waktu sholat berikutnya"
+            "Pesan yang belum dibuka", "Berkas di Rak", "Suhu dan peringatan hujan", "Laptop dan perangkat Bluetooth", "Teks terakhir yang disalin", "Waktu sholat berikutnya",
+            "Statistik ketikan, level XP, dan Sprint 30 detik", "Checklist 3 target utama hari ini di Ringkasan", "Menit fokus, streak harian, dan grafik 7 hari"
         };
-        static readonly char[] HomeGlyphs = { '', '', '', '', '', '', '', '', '', '', '' };
-        const string DefaultHome = "quota,media,agents,timer,class,messages,shelf";
+        static readonly char[] HomeGlyphs = { '', '', '', '', '', '', '', '', '', '', '', '\uE7FC', '\uE73A', '\uE916' };
+        const string DefaultHome = "quota,media,agents,timer,class,messages,shelf,priorities,focus,combo";
 
         HomeCard[] homeCards = new HomeCard[0];
         readonly Spring homeScroll = new Spring(0, 300, 34, 0.2f);
@@ -161,6 +162,9 @@ namespace Tepi
                 case HomeCard.Shelf: return shelf.Count > 0;
                 case HomeCard.Battery: return hasBattery || btBattery.Count > 0;
                 case HomeCard.Clips: return !ClipsOn || clips.Count > 0;
+                case HomeCard.Combo: return ComboOn || ComboXp > 0 || ComboAllTimeBest > 0 || TypingSprintActive;
+                case HomeCard.Priorities: return PriorityCount > 0;
+                case HomeCard.Focus: return FocusTotalMin > 0 || FocusMinToday > 0 || FocusStreakDays > 0 || TimerOn || PriorityCount > 0 || ComboOn;
             }
             return true;
         }
@@ -174,6 +178,9 @@ namespace Tepi
                 case HomeCard.Media: return 0;
                 case HomeCard.Agents: return approvals.Count > 0 || BusyCount() > 0 ? 1 : 3;
                 case HomeCard.Timer: return 1;
+                case HomeCard.Combo: return TypingSprintActive ? 1 : 2;
+                case HomeCard.Priorities: return PriorityCount > 0 && !PrioritiesAllDone ? 1 : 2;
+                case HomeCard.Focus: return TimerOn ? 1 : 2;
             }
             return 2;
         }
@@ -184,11 +191,12 @@ namespace Tepi
             return (next != null && (next.Start - DateTime.Now).TotalHours < 24) || (tasks != null && tasks.Count > 0);
         }
 
-        static bool WideCard(HomeCard c) { return c == HomeCard.Quota || c == HomeCard.Media; }
+        static bool WideCard(HomeCard c) { return c == HomeCard.Quota || c == HomeCard.Media || c == HomeCard.Priorities; }
 
         float CardHeight(HomeCard c)
         {
             if (c == HomeCard.Quota) return QuotaGlanceH() - HomeGap;
+            if (c == HomeCard.Priorities) return 114f;
             return c == HomeCard.Media ? HomeMusicH : HomeCardH;
         }
 
@@ -243,7 +251,7 @@ namespace Tepi
         // Only the quota line: the resting scene below it
         bool HomeQuiet { get { return homeSlots.Count == 0 || (homeSlots.Count == 1 && homeSlots[0].Key == HomeCard.Quota); } }
 
-        float HomeHeroH { get { return EyesOn ? 182 : 150; } }
+        float HomeHeroH { get { return EyesOn ? 194 : 162; } }
 
         float HomeHeight()
         {
@@ -306,6 +314,17 @@ namespace Tepi
             string wl = WeatherLine(), day = local.ToString("dddd, d MMMM", Fmt.Id);
             p.TextCenter(wl == null ? day : day + "  ·  " + wl, Ink.Text(13f), p.T.Sub, w / 2, cy + 34);
             p.TextCenter(Lang.T("Tidak ada yang menunggu"), Ink.Small(11.5f), p.T.Faint, w / 2, cy + 56);
+            if (Array.IndexOf(homeCards, HomeCard.Priorities) >= 0)
+            {
+                string label = "+ " + Lang.T("3 Prioritas Hari Ini");
+                var bf = Ink.Small(11f);
+                float bw = p.Measure(label, bf) + 22f;
+                float bh = 22f;
+                var btn = new RectangleF(w / 2f - bw / 2f, cy + 78f - bh / 2f, bw, bh);
+                AddHit(btn, "heroPrioAdd", delegate { BeginInvoke(new Action(PromptAddPriority)); });
+                p.FillRound(btn, bh / 2f, Ink.A(p.T.Text, Hover("heroPrioAdd") ? 0.12f : 0.06f));
+                p.TextCenter(label, bf, p.T.Sub, w / 2f, cy + 78f);
+            }
         }
 
         // Right click: hide it, or tune the list
@@ -385,6 +404,9 @@ namespace Tepi
                 case HomeCard.Battery: DrawBatteryCard(r); break;
                 case HomeCard.Clips: DrawClipsCard(r); break;
                 case HomeCard.Pray: DrawHomePray(r); break;
+                case HomeCard.Combo: DrawComboCard(r); break;
+                case HomeCard.Priorities: DrawPrioritiesCard(r); break;
+                case HomeCard.Focus: DrawFocusCard(r); break;
             }
         }
 
@@ -469,7 +491,10 @@ namespace Tepi
         void DrawTimerCard(RectangleF r, DateTime now)
         {
             CardBase(r, "homeTimer", HomeCard.Timer, delegate { SetPage(PageControl, false); });
-            CardCaption(r, '', timerPaused ? TimerLabel() + Lang.T(" · dijeda") : TimerLabel());
+            string timerCap = !string.IsNullOrEmpty(FocusTaskTitle) && (timerKind == TimerKind.Focus || timerKind == TimerKind.Break)
+                ? TimerLabel() + " · " + FocusTaskTitle
+                : TimerLabel();
+            CardCaption(r, '', timerPaused ? timerCap + Lang.T(" · dijeda") : timerCap);
             LiveRect(new RectangleF(r.X + 15, r.Y + 47, 26, 26), timerPaused ? 0 : TickFps, t => DrawTimerRing(r.X + 28, r.Y + 60, 11f));
             LiveTimer(Ink.Display(22f), timerPaused ? p.T.Sub : p.T.Text, r.X + 48, r.Y + 60, StringAlignment.Near, r.Right - r.X - 58);
         }
@@ -585,6 +610,200 @@ namespace Tepi
             if (i < 0) return;
             p.Text(Lang.T(PrayTimes.Names[i]) + " " + Fmt.Hm(at), Ink.Display(20f), p.T.Text, r.X + 16, r.Y + 50, r.Width - 30, StringAlignment.Near);
             p.Text(Lang.F("{0} lagi", Fmt.Left(at - DateTime.Now)), Ink.Small(11.5f), p.T.Sub, r.X + 16, r.Y + 72, r.Width - 30, StringAlignment.Near);
+        }
+
+        void DrawComboCard(RectangleF r)
+        {
+            CardBase(r, "homeCombo", HomeCard.Combo, delegate { BeginInvoke(new Action(delegate { OpenPrefs("combo"); })); });
+            if (!ComboOn && ComboXp == 0 && ComboAllTimeBest == 0 && !TypingSprintActive)
+            {
+                CardCaption(r, '\uE7FC', Lang.T("Combo Ketikan"));
+                CardSetup(r, Lang.T("Combo Ketikan mati"), Lang.T("Klik untuk atur & nyalakan"));
+                return;
+            }
+            string sprintLabel = TypingSprintActive ? TypingSprintLeft.ToString("0") + "s" : Lang.T("30s Sprint");
+            var sf = Ink.Semi(10.5f);
+            float bw = Math.Max(68f, p.Measure(sprintLabel, sf) + 16f);
+            float bh = 22f;
+            var btnRect = new RectangleF(r.Right - bw - 12f, r.Y + 11f, bw, bh);
+            string capText = ComboRpgOn ? Lang.F("Lv.{0} · {1}", ComboLevel, ComboLevelTitle) : Lang.T("Combo Ketikan");
+            p.Icon('\uE7FC', 12f, p.T.Sub, r.X + 22f, r.Y + 22f);
+            p.Text(capText, Ink.Semi(11.5f), p.T.Sub, r.X + 34f, r.Y + 22f, Math.Max(30f, btnRect.Left - (r.X + 34f) - 6f), StringAlignment.Near);
+            AddHit(btnRect, "homeSprint", delegate
+            {
+                BeginInvoke(new Action(delegate
+                {
+                    if (TypingSprintActive) StopTypingSprint();
+                    else StartTypingSprint();
+                }));
+            });
+            bool spDown = Pressed("homeSprint");
+            bool spHover = Hover("homeSprint");
+            Color spBg = TypingSprintActive
+                ? (spDown ? Ink.Mix(p.T.Accent, Color.Black, 0.2f) : spHover ? Ink.Mix(p.T.Accent, Color.White, 0.15f) : p.T.Accent)
+                : (spDown ? p.T.FillHover : spHover ? Ink.Mix(p.T.Fill, p.T.FillHover, 0.8f) : Ink.Mix(p.T.Fill, p.T.Text, 0.08f));
+            Color spFg = TypingSprintActive ? Color.White : p.T.Text;
+            p.FillRound(btnRect, bh / 2f, spBg);
+            p.TextCenter(sprintLabel, sf, spFg, btnRect.X + btnRect.Width / 2f, btnRect.Y + btnRect.Height / 2f);
+
+            float maxTextW = r.Width - 32f;
+            string mainText = ComboAllTimeBest + "x · " + ComboAllTimePeakWpm + " WPM";
+            p.Text(mainText, Ink.Semi(13.5f), TypingSprintActive ? p.T.Accent : p.T.Text, r.X + 16f, r.Y + 48f, maxTextW, StringAlignment.Near);
+            string subText = Lang.F("Hari ini {0}", ComboDailyChars);
+            if (ComboRpgOn) subText += " · " + ComboBadgesCount + "/" + ComboBadgesTotal + " " + Lang.T("lencana");
+            p.Text(subText, Ink.Small(11f), p.T.Sub, r.X + 16f, r.Y + 69f, maxTextW, StringAlignment.Near);
+            if (ComboRpgOn)
+            {
+                var bar = new RectangleF(r.X + 16f, r.Bottom - 10f, r.Width - 32f, 3f);
+                p.FillRound(bar, 1.5f, p.T.Line);
+                float prog = Math.Max(0f, Math.Min(1f, ComboLevelProgress));
+                if (prog > 0f)
+                    p.FillRound(new RectangleF(bar.X, bar.Y, Math.Max(3f, bar.Width * prog), 3f), 1.5f, p.T.Accent);
+            }
+        }
+
+        void DrawPrioritiesCard(RectangleF r)
+        {
+            CardBase(r, "homePriorities", HomeCard.Priorities, delegate { BeginInvoke(new Action(delegate { PromptAddPriority(); })); });
+            string cap = PriorityCount > 0 ? Lang.F("3 Prioritas · {0}/{1}", PriorityDoneCount, PriorityCount) : Lang.T("3 Prioritas Hari Ini");
+            if (PriorityCount < 3)
+            {
+                string addLabel = "+ " + Lang.T("Tambah");
+                var af = Ink.Semi(10.5f);
+                float bw = Math.Max(64f, p.Measure(addLabel, af) + 16f);
+                float bh = 22f;
+                var addBtn = new RectangleF(r.Right - bw - 12f, r.Y + 11f, bw, bh);
+                p.Icon('\uE73A', 12f, p.T.Sub, r.X + 22f, r.Y + 22f);
+                p.Text(cap, Ink.Semi(11.5f), p.T.Sub, r.X + 34f, r.Y + 22f, Math.Max(30f, addBtn.Left - (r.X + 34f) - 6f), StringAlignment.Near);
+                AddHit(addBtn, "prioAdd", delegate { BeginInvoke(new Action(PromptAddPriority)); });
+                bool addDown = Pressed("prioAdd");
+                bool addHover = Hover("prioAdd");
+                Color addBg = addDown ? p.T.FillHover : addHover ? Ink.Mix(p.T.Fill, p.T.FillHover, 0.8f) : Ink.Mix(p.T.Fill, p.T.Text, 0.08f);
+                p.FillRound(addBtn, bh / 2f, addBg);
+                p.TextCenter(addLabel, af, p.T.Text, addBtn.X + addBtn.Width / 2f, addBtn.Y + addBtn.Height / 2f);
+            }
+            else
+            {
+                CardCaption(r, '\uE73A', cap);
+            }
+
+            if (PriorityCount == 0)
+            {
+                CardSetup(r, Lang.T("Tetapkan maks. 3 target utama hari ini"), Lang.T("Klik + Tambah atau pilih dari tugas"));
+                return;
+            }
+
+            int count = Math.Min(3, PriorityCount);
+            for (int i = 0; i < count; i++)
+            {
+                int idx = i;
+                string title;
+                bool done;
+                if (!GetPriority(i, out title, out done)) continue;
+                float ry = r.Y + 36f + i * 24f;
+                float rh = 22f;
+                var rowRect = new RectangleF(r.X + 12f, ry, r.Width - 24f, rh);
+                bool rowHover = Hover("prioRow" + i) || Hover("prioChk" + i) || Hover("prioFoc" + i) || Hover("prioDel" + i);
+                if (rowHover) p.FillRound(rowRect, 6f, Ink.A(p.T.Text, 0.05f));
+                AddHit(rowRect, "prioRow" + i, delegate { TogglePriority(idx); });
+
+                float chkX = r.X + 16f;
+                float chkY = ry + (rh - 14f) / 2f;
+                var chkRect = new RectangleF(chkX, chkY, 14f, 14f);
+                AddHit(chkRect, "prioChk" + i, delegate { TogglePriority(idx); });
+                bool chkHover = Hover("prioChk" + i);
+                if (done)
+                {
+                    p.Circle(chkX + 7f, chkY + 7f, 7f, p.T.Accent);
+                    p.Check(chkX + 7f, chkY + 7f, 8f, Color.White, 1f);
+                }
+                else
+                {
+                    p.StrokeRound(chkRect, 7f, chkHover ? p.T.Accent : p.T.Sub, 1.4f);
+                }
+
+                var delRect = new RectangleF(r.Right - 32f, ry + 1f, 20f, 20f);
+                AddHit(delRect, "prioDel" + i, delegate { RemovePriority(idx); });
+                if (rowHover)
+                {
+                    bool delHover = Hover("prioDel" + i);
+                    if (delHover) p.FillRound(delRect, 5f, Ink.A(p.T.Text, 0.08f));
+                    p.Cross(delRect.X + 10f, delRect.Y + 10f, 8f, delHover ? p.T.Text : p.T.Sub);
+                }
+
+                float textRight = delRect.Left - 4f;
+                if (!done)
+                {
+                    var focRect = new RectangleF(delRect.Left - 24f, ry + 1f, 20f, 20f);
+                    AddHit(focRect, "prioFoc" + i, delegate { StartFocusOnPriority(idx); });
+                    bool focHover = Hover("prioFoc" + i);
+                    if (focHover) p.FillRound(focRect, 5f, Ink.A(p.T.Accent, 0.14f));
+                    p.Icon('\uE916', 11f, focHover ? p.T.Accent : (rowHover ? p.T.Text : p.T.Sub), focRect.X + 10f, focRect.Y + 10f);
+                    textRight = focRect.Left - 4f;
+                }
+
+                float tx = chkRect.Right + 8f;
+                float maxW = Math.Max(20f, textRight - tx);
+                float cy = ry + rh / 2f;
+                Font tf = Ink.Text(12f);
+                p.Text(title, tf, done ? p.T.Faint : p.T.Text, tx, cy, maxW, StringAlignment.Near);
+                if (done)
+                {
+                    float strikeW = Math.Min(maxW, p.Measure(title, tf));
+                    if (strikeW > 2f) p.G.DrawLine(p.P(p.T.Faint, 1f), tx, cy, tx + strikeW, cy);
+                }
+            }
+        }
+
+        void DrawFocusCard(RectangleF r)
+        {
+            CardBase(r, "homeFocus", HomeCard.Focus, delegate { SetPage(PageControl, false); });
+            string btnLabel = TimerOn ? Lang.T("Aktif") : Lang.T("Fokus 25m");
+            var sf = Ink.Semi(10.5f);
+            float bw = Math.Max(52f, p.Measure(btnLabel, sf) + 16f);
+            float bh = 22f;
+            var btnRect = new RectangleF(r.Right - bw - 12f, r.Y + 11f, bw, bh);
+            string capText = Lang.T("Fokus") + (FocusStreakDays > 0 ? " · " + FocusStreakDays + Lang.T("h") : "");
+            p.Icon('\uE916', 12f, p.T.Sub, r.X + 22f, r.Y + 22f);
+            p.Text(capText, Ink.Semi(11.5f), p.T.Sub, r.X + 34f, r.Y + 22f, Math.Max(30f, btnRect.Left - (r.X + 34f) - 6f), StringAlignment.Near);
+            AddHit(btnRect, "homeFocus25", delegate
+            {
+                if (!TimerOn) StartFocus(25);
+                else SetPage(PageControl, false);
+            });
+            bool down = Pressed("homeFocus25");
+            bool hover = Hover("homeFocus25");
+            Color bg = TimerOn
+                ? (down ? Ink.Mix(p.T.Accent, Color.Black, 0.2f) : hover ? Ink.Mix(p.T.Accent, Color.White, 0.15f) : p.T.Accent)
+                : (down ? p.T.FillHover : hover ? Ink.Mix(p.T.Fill, p.T.FillHover, 0.8f) : Ink.Mix(p.T.Fill, p.T.Text, 0.08f));
+            Color fg = TimerOn ? Color.White : p.T.Text;
+            p.FillRound(btnRect, bh / 2f, bg);
+            p.TextCenter(btnLabel, sf, fg, btnRect.X + btnRect.Width / 2f, btnRect.Y + btnRect.Height / 2f);
+
+            float maxTextW = r.Width - 32f;
+            string mainText = TimerOn && FocusTaskTitle.Length > 0
+                ? FocusTaskTitle
+                : FocusMinToday + " " + Lang.T("mnt") + " · " + FocusSessionsToday + " " + Lang.T("sesi");
+            p.Text(mainText, Ink.Semi(13.5f), TimerOn ? p.T.Accent : p.T.Text, r.X + 16f, r.Y + 48f, maxTextW, StringAlignment.Near);
+
+            string subText = Lang.F("Minggu ini {0} mnt · {1} tugas", FocusWeekTotalMin, FocusTasksDone);
+            float barsTotalW = 7f * 5f + 6f * 3f;
+            p.Text(subText, Ink.Small(11f), p.T.Sub, r.X + 16f, r.Y + 69f, Math.Max(30f, maxTextW - barsTotalW - 8f), StringAlignment.Near);
+
+            int[] bars = FocusWeekBars();
+            int maxBar = 1;
+            if (bars != null)
+                for (int i = 0; i < bars.Length; i++)
+                    if (bars[i] > maxBar) maxBar = bars[i];
+            float baseBottom = r.Bottom - 8f;
+            for (int i = 0; i < 7; i++)
+            {
+                int val = bars != null && i < bars.Length ? bars[i] : 0;
+                float barH = val > 0 ? Math.Max(2.5f, 10f * val / maxBar) : 2f;
+                float bx = r.Right - 16f - (7 - i) * 5f - (6 - i) * 3f;
+                Color bc = val <= 0 ? p.T.Line : (i == 6 ? p.T.Accent : Ink.A(p.T.Accent, 0.45f));
+                p.FillRound(new RectangleF(bx, baseBottom - barH, 5f, barH), 1.5f, bc);
+            }
         }
     }
 }

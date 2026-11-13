@@ -14,14 +14,14 @@ namespace Tepi
         static readonly HashSet<string> Portable = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "material", "theme", "lyrics", "lyrics.online", "visualizer", "music.view", "notif", "notif.content", "notif.apps", "notif.vip",
-            "agent.wait", "agent.quota", "update.check", "accent", "monitor", "focus.break", "dock", "position", "panel.width", "panel.tabs",
+            "agent.wait", "agent.quota", "update.check", "accent", "monitor", "focus.break", "focus.hold", "dock", "position", "panel.width", "panel.tabs",
             "place", "place.inset", "place.y", "home.cards", "home.sort", "tabs.trigger",
             "dockbar.on", "dockbar.replace", "dockbar.reserve", "dockbar.magnify", "dockbar.pins", "dockbar.work",
             "dockbar.w.clock", "dockbar.w.media", "dockbar.w.ai", "dockbar.w.timer", "dockbar.w.weather", "dockbar.w.battery", "dockbar.w.system", "dockbar.style", "dockbar.size", "dockbar.mag", "dockbar.hide", "dockbar.revealdelay", "dockbar.previews", "dockbar.badges", "dockbar.search", "dockbar.taskview", "dockbar.capture",
             "panel.first", "panel.open", "panel.delay", "tabs.style", "mini", "mini.notif", "island.eyes", "island.follow", "idle.face", "island.except",
             "prompter.wpm", "prompter.size", "prompter.mirror", "prompter.width", "prompter.height", "prompter.bg", "lang", "capture.show",
             "a11y.announce", "clipboard", "downloads", "class.island", "shelf", "shelf.keep", "shelf.expire", "convert", "shots", "drives",
-            "meeting", "keys.caps", "keys.num", "keys.lang", "battery.unplug", "note.to", "dnd", "dnd.follow", "motion.reduce", "motion.feel",
+            "meeting", "keys.caps", "keys.num", "keys.lang", "keys.combo", "keys.combo.sound", "keys.combo.sound.profile", "keys.combo.fever", "keys.combo.penalty", "keys.combo.enter", "keys.combo.rpg", "keys.combo.quest.chars", "keys.combo.quest.combos", "battery.unplug", "note.to", "dnd", "dnd.follow", "motion.reduce", "motion.feel",
             "pray", "pray.city", "pray.before", "drink", "drink.every", "drink.goal", "eyes", "stretch", "stretch.every", "theme.pack",
             "theme.voice", "weather", "clock.24", "look.custom", "look.bg", "look.text", "look.accent", "wall.sync", "sound.agent", "phone.notifs", "phone.otp",
             "sound.drink", "sound.eyes", "sound.stretch", "sound.pray", "sound.pray.before", "ibadah.count",

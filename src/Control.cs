@@ -365,6 +365,12 @@ namespace Tepi
             {
                 p.Icon(Ink.IcoTimer, 15f, p.T.Sub, r.X + 25, r.Y + 26);
                 p.Text(Lang.T("Timer"), Ink.Headline, p.T.Text, r.X + 46, r.Y + 26, 200, StringAlignment.Near);
+                string taskChip = FocusTaskTitle.Length > 0 ? FocusTaskTitle : Lang.T("Pilih tugas fokus…");
+                float chipW = Math.Min(r.Width - 130, Math.Max(110, p.Measure(taskChip, Ink.Caption) + 20));
+                var chipRect = new RectangleF(r.Right - pad - chipW, r.Y + 14, chipW, 24);
+                AddHit(chipRect, "tmPickTask", PickFocusTaskMenu);
+                p.Module(chipRect, 12, Hover("tmPickTask") ? p.T.FillHover : p.T.Fill);
+                p.Text(taskChip, Ink.Caption, FocusTaskTitle.Length > 0 ? p.T.Text : p.T.Sub, chipRect.X + 10, chipRect.Y + 12, chipW - 20, StringAlignment.Near);
                 // Presets share the width evenly
                 int n = ChipNames.Length;
                 float gap = 8, cw = (r.Width - 2 * pad - gap * (n - 1)) / n;
@@ -382,6 +388,17 @@ namespace Tepi
             if (key != tmLabelKey) { tmLabelKey = key; tmLabel = timerPaused ? TimerLabel() + Lang.T(" · dijeda") : TimerLabel(); }
             float tx = ctlRingX + 24 + pad;
             p.Text(tmLabel, Ink.Callout, p.T.Sub, tx, cy - 19, 220, StringAlignment.Near);
+            if ((timerKind == TimerKind.Focus || timerKind == TimerKind.Break) && FocusTaskTitle.Length > 0)
+            {
+                float lw = p.Measure(tmLabel, Ink.Callout);
+                float maxTaskW = Math.Max(40, (r.Right - pad - 148) - (tx + lw + 8));
+                if (maxTaskW > 40)
+                {
+                    var taskRect = new RectangleF(tx + lw + 8, cy - 28, maxTaskW, 18);
+                    AddHit(taskRect, "tmPickTask", PickFocusTaskMenu);
+                    p.Text("· " + FocusTaskTitle, Ink.Caption, Hover("tmPickTask") ? p.T.Text : p.T.Sub, taskRect.X, cy - 19, maxTaskW, StringAlignment.Near);
+                }
+            }
             if (laps.Count > 0)
             {
                 if (laps.Count != tmLapCount) { tmLapCount = laps.Count; tmLap = Lang.F("Putaran {0} · {1}", laps.Count, FormatSpan(laps[0])); }

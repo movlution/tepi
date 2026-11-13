@@ -52,6 +52,7 @@ namespace Tepi
                 case View.Otp: return new SizeF(OtpWidth(), 64);
                 case View.Dictate: return new SizeF(DictWidth(), DictHeight());
                 case View.Record: return new SizeF(RapatWidth(), 38);
+                case View.Combo: return new SizeF(ComboWidth(), ComboHeight());
                 case View.Mini: return MiniSize();
                 default: return new SizeF(PanelW, PanelHeight());
             }
@@ -119,6 +120,7 @@ namespace Tepi
                 case View.Otp: DrawOtp(w, h); break;
                 case View.Dictate: DrawDictate(w, h, now); break;
                 case View.Record: DrawRapat(w, h); break;
+                case View.Combo: DrawCombo(w, h, now); break;
                 case View.Mini: DrawMini(w, h, now); break;
                 case View.Panel: DrawPanel(w, h, now); break;
             }
@@ -131,6 +133,7 @@ namespace Tepi
             volBar.Step(dt);
             batteryFill.Step(dt);
             lyricScroll.Step(dt);
+            StepCombo(dt);
             orbitPhase = (orbitPhase + dt / 1.15f) % 1f;
             if (spectrum.Active) spectrum.CopyBands(rawBands);
             bool on = mediaInfo.Playing && spectrum.Active;
@@ -159,7 +162,7 @@ namespace Tepi
         // Lyric motion runs in live areas
         bool ViewsMoving(DateTime now)
         {
-            return !volBar.Settled || !batteryFill.Settled || volRoller.Moving(now) || taskRoller.Moving(now);
+            return !volBar.Settled || !batteryFill.Settled || volRoller.Moving(now) || taskRoller.Moving(now) || current == View.Combo || ComboAnimating();
         }
 
         // Views still redrawn whole at ambient rate
